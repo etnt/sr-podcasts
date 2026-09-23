@@ -18,6 +18,10 @@ Android shows a media notification with player controls. The home screen shows
 the app version next to the app name. A local build shows `dev`, and a tagged
 release build shows the git tag.
 
+## Screenshot
+
+<a href="screenshots/screenshot.jpeg"><img src="screenshots/screenshot.jpeg" alt="Screenshot" width="19%"></a>
+
 ## Search and subscriptions
 
 Tap the magnifier icon on the home screen to open the search screen. Type the
