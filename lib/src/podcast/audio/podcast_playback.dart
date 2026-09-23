@@ -5,10 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/podcast_catalog.dart';
 import '../domain/podcast_episode.dart';
+import 'podcast_audio_handler.dart';
 import 'podcast_player.dart';
 
 final podcastPlayerProvider = Provider<PodcastPlayer>((ref) {
-  final player = JustAudioPodcastPlayer();
+  final player = AudioServicePodcastPlayer(sharedPodcastAudioHandler);
   ref.onDispose(player.dispose);
   return player;
 });
