@@ -26,6 +26,8 @@ Future<void> main() async {
       androidNotificationChannelId: 'se.sverigesradio.podcastshortcut.audio',
       androidNotificationChannelName: 'Podcast playback',
       androidNotificationOngoing: true,
+      androidBrowsableRootExtras:
+          PodcastAudioHandler.androidBrowsableRootExtras,
     ),
   );
   await configurePodcastAudioSession();

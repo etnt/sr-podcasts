@@ -24,6 +24,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
+  just_audio_platform_interface: ^4.6.0
 
 flutter:
   uses-material-design: true
