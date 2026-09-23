@@ -24,12 +24,22 @@ class SubscriptionsNotifier extends AsyncNotifier<List<PodcastProgram>> {
   static const _storageKey = 'subscriptions.v1';
 
   @override
-  Future<List<PodcastProgram>> build() async {
-    final prefs = ref.watch(sharedPreferencesProvider);
+  Future<List<PodcastProgram>> build() =>
+      loadSubscriptions(ref.watch(sharedPreferencesProvider));
+
+  /// Loads the saved subscriptions from [prefs], seeding the hardcoded
+  /// default show on first run. Shared by the notifier above and by the
+  /// audio handler in `main()`, which runs outside the Riverpod scope.
+  static Future<List<PodcastProgram>> loadSubscriptions(
+    SharedPreferences prefs,
+  ) async {
     final raw = prefs.getString(_storageKey);
     if (raw == null) {
       final seed = [podcastCatalog.first];
-      await _persist(prefs, seed);
+      await prefs.setString(
+        _storageKey,
+        jsonEncode(seed.map((program) => program.toJson()).toList()),
+      );
       return seed;
     }
     return _decode(raw);

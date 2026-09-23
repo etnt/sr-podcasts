@@ -1,7 +1,7 @@
-import 'dart:async';
-
+import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+
+import 'podcast_audio_handler.dart';
 
 /// Player operations needed by the podcast UI, abstracted so tests can
 /// provide a fake implementation without native audio or network access.
@@ -27,8 +27,15 @@ abstract interface class PodcastPlayer {
   Future<void> dispose();
 }
 
-class JustAudioPodcastPlayer implements PodcastPlayer {
-  final AudioPlayer _player = AudioPlayer();
+/// The production [PodcastPlayer]. Drives the [AudioPlayer] owned by the
+/// shared [PodcastAudioHandler], so the phone UI, the media notification,
+/// and later Android Auto all follow one playback state.
+class AudioServicePodcastPlayer implements PodcastPlayer {
+  AudioServicePodcastPlayer(this._handler);
+
+  final PodcastAudioHandler _handler;
+
+  AudioPlayer get _player => _handler.player;
 
   @override
   bool get playing => _player.playing;
@@ -52,16 +59,14 @@ class JustAudioPodcastPlayer implements PodcastPlayer {
     String? artist,
     Uri? artUri,
   }) async {
-    await _player.setAudioSource(
-      AudioSource.uri(
-        audioUrl,
-        tag: MediaItem(
-          id: id,
-          album: album,
-          title: title,
-          artist: artist,
-          artUri: artUri,
-        ),
+    await _player.setAudioSource(AudioSource.uri(audioUrl));
+    _handler.mediaItem.add(
+      MediaItem(
+        id: id,
+        album: album,
+        title: title,
+        artist: artist,
+        artUri: artUri,
       ),
     );
   }
