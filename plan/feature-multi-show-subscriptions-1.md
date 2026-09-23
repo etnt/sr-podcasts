@@ -58,7 +58,7 @@ This plan extends the existing Android-first Flutter player (Radiokorrespondente
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-008 | Add `.github/workflows/release.yml` per the skill pattern: `v*` tag + manual triggers, analyze and tests, split-per-ABI and universal release APKs with `--dart-define=APP_VERSION=${{ github.ref_name }}`, published via `softprops/action-gh-release@v2`. Omit keystore steps until signing secrets exist (SEC-001). | ✅ | 2026-09-23 |
+| TASK-008 | Add `.github/workflows/release.yml` per the skill pattern: `v*` tag + manual triggers, analyze and tests, split-per-ABI and universal release APKs with `--dart-define=APP_VERSION=${{ github.ref_name }}`, published via `softprops/action-gh-release@v2`, with keystore decode and `key.properties` steps that sign release APKs from the `KEYSTORE_BASE64` and `KEYSTORE_PASSWORD` secrets (SEC-001). | ✅ | 2026-09-23 |
 | TASK-009 | Update `README.md`: search/subscribe usage, persistence schema, search-corpus caveat (single ~842 KB request), version badge injection, and how to cut a `v*` release; note signing as a follow-up. | ✅ | 2026-09-23 |
 
 ### Implementation Phase 4 — Tests and validation
@@ -78,7 +78,7 @@ This plan extends the existing Android-first Flutter player (Radiokorrespondente
 - **ALT-002**: Server-side filtering via `programs/index?query=`. Rejected: the parameter is ignored; the API returns all 627 programs regardless.
 - **ALT-003**: Persist the program corpus on disk for offline search. Deferred: an in-memory session cache is sufficient for the MVP; disk caching can be added later if cold-start cost matters.
 - **ALT-004**: Migrate to `go_router`. Deferred: the app has a two-level flow with no deep links; plain Navigator is the smaller dependency (CON-002).
-- **ALT-005**: Signed release workflow now. Deferred: no keystore exists; the skill reference explicitly supports unsigned artifacts until signing secrets are provisioned.
+- **ALT-005**: Signed release workflow now. Adopted after this plan was written: the workflow signs with secrets when present and Gradle falls back to debug signing locally, following the proven pattern in the my-football project.
 
 ## 4. Dependencies
 
@@ -124,7 +124,7 @@ This plan extends the existing Android-first Flutter player (Radiokorrespondente
 - **RISK-002**: `just_audio_background` is a beta package; tagged releases should be smoke-tested after each bump.
 - **RISK-003**: Client-side search may miss SR metadata nuances (e.g., renamed shows) that a server-side index would catch; revisit if SR fixes its search endpoints.
 - **ASSUMPTION-001**: Local-only subscriptions (no sync) are acceptable for this personal app.
-- **ASSUMPTION-002**: Releases are unsigned/debug-signed until the user provisions a keystore and GitHub secrets.
+- **ASSUMPTION-002**: Release APKs stay debug-signed until a keystore is generated and the `KEYSTORE_BASE64` and `KEYSTORE_PASSWORD` GitHub secrets are added.
 
 ## 8. Related Specifications / Further Reading
 

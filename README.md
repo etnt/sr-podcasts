@@ -1,59 +1,73 @@
-# My favourite Sveriges Radion podcasts
+# My favorite Sveriges Radio podcasts
 
-I find it somewhat cumbersome to find the podcast I want to listen to via Sveriges Radio
-app; especially when in my car. This is a mobile Android-first app that hardcodes them
-for quick and easy access.
+The Sveriges Radio app makes it hard to find a specific podcast while you
+drive. This project is a small Android app with a personal short list of
+Sveriges Radio podcasts. You open the app and tap a show. The latest episodes
+appear without a search.
 
-## Current app
+## What the app does
 
-The Android-first Flutter app supports **multiple subscribed shows**. It ships with
-**Radiokorrespondenterna Kina** pre-subscribed; other Sveriges Radio podcasts can be
-found via the in-app search (magnifier icon) and subscribed with one tap.
-Subscriptions persist locally. Episodes load from the Sveriges Radio public API and
-stream as MP3 files, including in the background with Android media notification
-controls. The home AppBar shows the app version beside the app name (`dev` in local
-builds; the git tag in tagged release builds).
+The app is a Flutter app for Android. The home screen shows the shows that you
+subscribe to. A subscription is a saved link to a show in the catalog of
+Sveriges Radio. The app ships with the show Radiokorrespondenterna Kina in the
+list.
 
-### Search and subscriptions
+You add more shows with the search screen. Episodes stream from the public API
+of Sveriges Radio as MP3 files. Playback continues when the screen is off.
+Android shows a media notification with player controls. The home screen shows
+the app version next to the app name. A local build shows `dev`, and a tagged
+release build shows the git tag.
 
-- The search screen filters the full SR program catalog client-side:
-  case-insensitive on name and description, podcast programs only
-  (493 of 627 programs as of 2026-09-23).
-- Sveriges Radio's dedicated search endpoints return HTTP 500 and `programs/index`
-  ignores query parameters, so the app fetches the full catalog once per session
-  (~842 KB) and filters locally.
-- Subscriptions are stored locally under the `shared_preferences` key
-  `subscriptions.v1` as a JSON array of
-  `{id, name, programurl, programimage?, description?, haspod}`.
-- First run seeds Radiokorrespondenterna Kina so the app is useful immediately;
-  unsubscribing it is allowed and persists.
+## Search and subscriptions
 
-### Sveriges Radio API verification
+Tap the magnifier icon on the home screen to open the search screen. Type the
+name of a show. The app filters the program catalog while you type. The filter
+matches letters in the name or the description of a show. The results contain
+podcast programs only.
 
-- Program: Radiokorrespondenterna Kina
-- Program ID: `5386`
-- Program record URL: <https://api.sr.se/api/v2/programs/5386?format=json>
-- Episode endpoint: <https://api.sr.se/api/v2/episodes/index?programid=5386&format=json>
-- Verified episode audio field: `episodes[].listenpodfile.url`
-- The episode endpoint is paginated and returns a `pagination.nextpage` URL.
-  The app requests pages of 100 episodes and follows HTTPS pagination links only on `api.sr.se`.
-- Verified using the live API on 2026-09-23. One returned MP3 URL responded with `200 audio/mpeg`.
-- The SR page and RSS host blocked automated inspection during implementation;
-  the app uses the official API and the canonical show page link rather than scraping HTML.
-- Android 14 Pixel emulator smoke test: app launched, live episode cards loaded,
-  a real MP3 started, and the Sveriges Radio media notification appeared with
-  player metadata and controls. A physical Android device was not available for testing.
+The app downloads the full program catalog one time per session. The catalog
+has 627 programs and the download is about 842 KB. 493 of the programs are
+podcasts, as of 2026-09-23. The search API of Sveriges Radio returns HTTP 500,
+and the program list endpoint ignores search parameters. The app therefore
+filters the catalog on the phone.
 
-### Run and validate
+The app stores subscriptions on the phone under the `shared_preferences` key
+`subscriptions.v1`. The stored value is a JSON array with this shape:
+`{id, name, programurl, programimage?, description?, haspod}`. The first app
+start adds Radiokorrespondenterna Kina to the list. You can remove that show.
+The app saves the change.
 
-Requirements: Flutter/Dart SDK and Android SDK installed. From the repository root:
+## API facts
+
+The app talks to the public API of Sveriges Radio at `api.sr.se`. A developer
+checked the facts in this list against the live API on 2026-09-23.
+
+- Program: Radiokorrespondenterna Kina, program ID `5386`
+- Program record: `https://api.sr.se/api/v2/programs/5386?format=json`
+- Episode endpoint:
+  `https://api.sr.se/api/v2/episodes/index?programid=5386&format=json`
+- Audio field for an episode: `episodes[].listenpodfile.url`
+- The episode endpoint is paginated. The app requests pages of 100 episodes
+  and follows `pagination.nextpage` links. It accepts HTTPS links on
+  `api.sr.se` only.
+- One MP3 URL answered with `200 audio/mpeg` during the check.
+- The Sveriges Radio website blocked automated reads during development. The
+  app uses the official API and the show page link. It does not read the
+  website HTML.
+
+## Run the app
+
+You need the Flutter SDK and the Android SDK on your computer. Open a terminal
+in the repository root.
 
 ```sh
 flutter pub get
 flutter run
 ```
 
-Validation commands:
+## Test the app
+
+Run these commands from the repository root.
 
 ```sh
 dart format --set-exit-if-changed lib test integration_test
@@ -63,46 +77,80 @@ flutter test integration_test -d <device-id> # e.g. emulator-5554
 flutter build apk --debug
 ```
 
-Automated gates were last run on 2026-09-23 with Flutter 3.44.0 and all passed: formatting,
-`flutter analyze`, 34 unit/widget tests, the integration smoke test on the Android emulator,
-and the debug APK build. Playback in the emulator was additionally confirmed manually.
-Test fixtures serve HTTP responses with an explicit `charset=utf-8` header so
-non-ASCII episode titles decode identically on host and device.
+The integration test needs a connected device or emulator. Replace
+`<device-id>` with an ID from `flutter devices`.
 
-### Releases
+The last validation run used Flutter 3.44.0 on 2026-09-23. All commands
+passed. The suite contains 34 unit tests and widget tests. A developer also
+confirmed playback in the emulator by hand. The test fixtures send HTTP
+responses with an explicit `charset=utf-8` header, so non-ASCII titles decode
+the same way on the computer and on the device.
 
-Cutting a release is tag-driven (`.github/workflows/release.yml`):
+A developer tested the full app by hand in the Android 14 Pixel emulator on
+2026-09-23. The app started, episodes loaded, playback ran, and the media
+notification appeared. A test on a physical Android device is still open.
 
-```sh
-git tag v1.0.0 && git push origin v1.0.0
+## Cut a release
+
+The release workflow lives in `.github/workflows/release.yml`. It starts when
+you push a git tag that starts with `v`.
+
+1. Run `git tag v1.0.0`.
+2. Run `git push origin v1.0.0`.
+3. Wait for the workflow. It runs the checks and builds split-per-ABI APKs and
+   one universal APK.
+4. The build sets the app version from the tag with
+   `--dart-define=APP_VERSION=${{ github.ref_name }}`.
+5. The workflow attaches the APK files to a GitHub Release.
+
+Release APKs are signed with a persistent keystore so that updates can be
+installed over previous versions without conflicts. The signing key is stored as
+GitHub Actions secrets and decoded at build time.
+
+**Repository secrets required** (Settings → Secrets and variables → Actions):
+
+| Secret              | Value                                            |
+|---------------------|--------------------------------------------------|
+| `KEYSTORE_BASE64`   | The release keystore, base64-encoded: `base64 -i android/release-keystore.jks` |
+| `KEYSTORE_PASSWORD` | Password for both the keystore and the key alias |
+
+The Gradle build reads `android/key.properties` when present; the workflow
+creates that file from secrets before building. Locally, if `key.properties`
+does not exist, the build falls back to the debug signing key.
+
+**Generating a new keystore** (only needed if the original is lost):
+
+```bash
+keytool -genkey -v \
+  -keystore android/release-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias release
 ```
 
-The workflow runs analyze/tests, builds split-per-ABI and universal release APKs with
-`--dart-define=APP_VERSION=${{ github.ref_name }}` (so the git tag becomes the on-screen
-version), and publishes them to a GitHub Release. The artifacts are unsigned until signing
-is configured; to enable signed releases, add `KEYSTORE_BASE64` and `KEYSTORE_PASSWORD`
-repository secrets, keystore decode/`key.properties` steps in the workflow, and matching
-Gradle signing configuration.
 
-### Add another curated show
+## Add a show
 
-Open the in-app search (magnifier icon), type the show's name, and tap the bookmark
-icon to subscribe — it then appears on the home screen. Programmatically, the catalog
-in `lib/src/podcast/data/podcast_catalog.dart` only defines the first-run seed; use
-the official API's verified program ID and fields, and confirm the program record and
-its episode audio fields from the API before relying on it.
+You add shows in the app. Tap the magnifier icon, type the name of the show,
+and tap the bookmark icon. The show then appears on the home screen.
 
-### Playback notes
+The file `lib/src/podcast/data/podcast_catalog.dart` only defines the show for
+the first app start. Make sure that the API returns the program record and the
+audio field for a show before you rely on it. Do not guess the program ID from
+the page address.
 
-Playback uses `just_audio` with `just_audio_background` for a single Android
-media session and notification. Player operations sit behind a small `PodcastPlayer`
-interface (`lib/src/podcast/audio/podcast_player.dart`), so widget and integration
-tests run with an in-memory fake player and no audio hardware. Episode metadata
-and streaming MP3s are served by Sveriges Radio. Network access is required;
-download/offline playback and episode bookmarking are not implemented.
-Background playback and Android notification controls should be confirmed on
-a physical Android device before release.
+## Playback
+
+The app plays audio with `just_audio` and `just_audio_background`. They
+provide one media session and the media notification. The player code sits
+behind the `PodcastPlayer` interface in
+`lib/src/podcast/audio/podcast_player.dart`. Tests use an in-memory fake
+player, so they run without audio hardware.
+
+The app needs a network connection for episodes. It does not download episodes
+for offline playback. It does not store the playback position between app
+starts.
 
 ## License
 
-MPL-2.0
+The code uses MPL-2.0. See the `LICENSE` file for the full text. Sveriges
+Radio owns the audio content.
