@@ -47,7 +47,8 @@ void main() {
       }),
     );
 
-    expect(find.text('Radiokorrespondenterna Kina'), findsOneWidget);
+    // The program name appears twice: AppBar title and program header.
+    expect(find.text('Radiokorrespondenterna Kina'), findsNWidgets(2));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     await tester.pumpAndSettle();

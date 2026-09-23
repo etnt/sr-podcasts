@@ -21,7 +21,7 @@ class PodcastScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SR Podcasts'),
+        title: Text(selectedProgram.name),
         actions: [
           IconButton(
             tooltip: 'Open Sveriges Radio page',

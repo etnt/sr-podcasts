@@ -7,12 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:podcastshortcut/main.dart';
 import 'package:podcastshortcut/src/podcast/audio/podcast_playback.dart';
 import 'package:podcastshortcut/src/podcast/audio/podcast_player.dart';
-import 'package:podcastshortcut/src/podcast/data/podcast_catalog.dart';
 import 'package:podcastshortcut/src/podcast/data/podcast_providers.dart';
-import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
-import 'package:podcastshortcut/src/podcast/presentation/podcast_screen.dart';
+import 'package:podcastshortcut/src/podcast/data/subscriptions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Offline fake used by the integration smoke test. Kept in this file
 /// because integration tests cannot import helpers from `test/`.
@@ -92,83 +92,83 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   // Inlined (instead of read from disk) because this test runs on the device.
-  // Values mirror the sanitized fixture in test/fixtures/.
   const fixture = <String, dynamic>{
     'episodes': [
       <String, dynamic>{
         'id': 2877969,
         'title': 'Därför platsar BRICS i Kinas världsordning',
-        'description':
-            'Med BRICS-samarbetet som verktyg vill Kina flytta fram sina '
-            'globala positioner.',
+        'description': 'Med BRICS-samarbetet som verktyg.',
         'url': 'https://www.sverigesradio.se/avsnitt/2877969',
         'publishdateutc': '/Date(1790008380000)/',
-        'imageurl':
-            'https://static-cdn.sr.se/images/5386/62b8a260-203f-4d38-bbea-8ee9244137c1.jpg'
-            '?preset=api-default-square',
         'listenpodfile': <String, dynamic>{
           'duration': 1620,
-          'url':
-              'https://static-cdn.sr.se/laddahem/podradio/2026/09/'
-              'radiokorrespondenterna_kina_darfor_platsar_brics_i_kinas_v_20260918_1502506642.mp3',
+          'url': 'https://static-cdn.sr.se/audio/episode.mp3',
         },
       },
     ],
   };
-  final episodeTitle =
-      ((fixture['episodes'] as List<dynamic>).first
-              as Map<String, dynamic>)['title']
-          as String;
-  final episodeAudioUrl = Uri.parse(
-    (((fixture['episodes'] as List<dynamic>).first
-                as Map<String, dynamic>)['listenpodfile']
-            as Map<String, dynamic>)['url']
-        as String,
+
+  // A stored subscription whose artwork points at an unreachable local URL
+  // keeps the whole flow offline (no CDN or SR requests).
+  const offlineProgram = <String, dynamic>{
+    'id': 5386,
+    'name': 'Radiokorrespondenterna Kina',
+    'programurl': 'https://127.0.0.1:1/show',
+    'programimage': 'https://127.0.0.1:1/image.jpg',
+    'haspod': true,
+  };
+  const episodeTitle = 'Därför platsar BRICS i Kinas världsordning';
+  const episodeAudioUrl = 'https://static-cdn.sr.se/audio/episode.mp3';
+
+  testWidgets(
+    'launches the app, opens the subscribed show, and plays offline',
+    (tester) async {
+      final fakePlayer = _FakePodcastPlayer();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('subscriptions.v1');
+      await prefs.setString('subscriptions.v1', jsonEncode([offlineProgram]));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            httpClientProvider.overrideWithValue(
+              MockClient((request) async => jsonResponse(fixture)),
+            ),
+            podcastPlayerProvider.overrideWithValue(fakePlayer),
+          ],
+          child: const MainApp(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Home lists the subscribed show; the AppBar badge shows the dev version.
+      final titleTexts = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data ?? text.textSpan?.toPlainText() ?? '');
+      expect(titleTexts.any((text) => text.contains('SR Podcasts')), isTrue);
+      expect(find.text('Radiokorrespondenterna Kina'), findsOneWidget);
+
+      await tester.tap(find.text('Radiokorrespondenterna Kina'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(episodeTitle), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.play_arrow).first);
+      await tester.pumpAndSettle();
+
+      expect(fakePlayer.loadedUrls, [Uri.parse(episodeAudioUrl)]);
+
+      // Re-emit after the controls appeared and subscribed to the stream.
+      fakePlayer.emitPlaying(true);
+      await tester.pump();
+
+      expect(find.byTooltip('Pause'), findsOneWidget);
+      await tester.tap(find.byTooltip('Pause'));
+      await tester.pump();
+
+      expect(fakePlayer.pauseCalls, 1);
+    },
   );
-
-  testWidgets('shows the hardcoded show and plays an episode via fake player', (
-    tester,
-  ) async {
-    final fakePlayer = _FakePodcastPlayer();
-    // Use the real hardcoded program but replace its CDN image with a local
-    // unreachable URL so the test makes no external network requests.
-    final program = PodcastProgram(
-      id: podcastCatalog.first.id,
-      name: podcastCatalog.first.name,
-      pageUrl: podcastCatalog.first.pageUrl,
-      imageUrl: Uri.parse('https://127.0.0.1:1/unavailable.jpg'),
-    );
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          httpClientProvider.overrideWithValue(
-            MockClient((request) async => jsonResponse(fixture)),
-          ),
-          podcastPlayerProvider.overrideWithValue(fakePlayer),
-        ],
-        child: MaterialApp(home: PodcastScreen(program: program)),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('Radiokorrespondenterna Kina'), findsOneWidget);
-    expect(find.text(episodeTitle), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.play_arrow).first);
-    await tester.pumpAndSettle();
-
-    expect(fakePlayer.loadedUrls, [episodeAudioUrl]);
-
-    // Re-emit after the controls appeared and subscribed to the stream.
-    fakePlayer.emitPlaying(true);
-    await tester.pump();
-
-    expect(find.byTooltip('Pause'), findsOneWidget);
-    await tester.tap(find.byTooltip('Pause'));
-    await tester.pump();
-
-    expect(fakePlayer.pauseCalls, 1);
-  });
 }

@@ -102,5 +102,54 @@ class SrApiClient {
     );
   }
 
+  /// Fetches the full SR program catalog (627 programs, ~842 KB) used as the
+  /// client-side search corpus. SR's server-side search endpoints are broken
+  /// (HTTP 500) and `programs/index` ignores query parameters, so search
+  /// filters this list locally. Malformed single entries are skipped: one bad
+  /// record must not disable search entirely.
+  Future<List<PodcastProgram>> fetchAllPrograms() async {
+    final response = await _httpClient.get(
+      _apiRoot.replace(
+        path: '/api/v2/programs/index',
+        queryParameters: {'pagination': 'false', 'format': 'json'},
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw SrApiException(
+        'Sveriges Radio returned HTTP ${response.statusCode}. Please try again.',
+      );
+    }
+
+    final Map<String, dynamic> decoded;
+    try {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is! Map<String, dynamic>) {
+        throw const FormatException('Expected a JSON object.');
+      }
+      decoded = body;
+    } on FormatException catch (error) {
+      throw SrApiException(
+        'Could not read Sveriges Radio response: ${error.message}',
+      );
+    }
+
+    final rawPrograms = decoded['programs'];
+    if (rawPrograms is! List) {
+      throw const SrApiException(
+        'Sveriges Radio response did not contain a program list.',
+      );
+    }
+    final programs = <PodcastProgram>[];
+    for (final value in rawPrograms) {
+      if (value is! Map<String, dynamic>) continue;
+      try {
+        programs.add(PodcastProgram.fromJson(value));
+      } on FormatException {
+        continue;
+      }
+    }
+    return programs;
+  }
+
   void close() => _httpClient.close();
 }

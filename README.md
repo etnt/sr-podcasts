@@ -6,9 +6,27 @@ for quick and easy access.
 
 ## Current app
 
-The Android-first Flutter app currently opens **Radiokorrespondenterna Kina**.
-It loads episodes from the Sveriges Radio public API and streams available MP3
-files, including in the background with Android media notification controls.
+The Android-first Flutter app supports **multiple subscribed shows**. It ships with
+**Radiokorrespondenterna Kina** pre-subscribed; other Sveriges Radio podcasts can be
+found via the in-app search (magnifier icon) and subscribed with one tap.
+Subscriptions persist locally. Episodes load from the Sveriges Radio public API and
+stream as MP3 files, including in the background with Android media notification
+controls. The home AppBar shows the app version beside the app name (`dev` in local
+builds; the git tag in tagged release builds).
+
+### Search and subscriptions
+
+- The search screen filters the full SR program catalog client-side:
+  case-insensitive on name and description, podcast programs only
+  (493 of 627 programs as of 2026-09-23).
+- Sveriges Radio's dedicated search endpoints return HTTP 500 and `programs/index`
+  ignores query parameters, so the app fetches the full catalog once per session
+  (~842 KB) and filters locally.
+- Subscriptions are stored locally under the `shared_preferences` key
+  `subscriptions.v1` as a JSON array of
+  `{id, name, programurl, programimage?, description?, haspod}`.
+- First run seeds Radiokorrespondenterna Kina so the app is useful immediately;
+  unsubscribing it is allowed and persists.
 
 ### Sveriges Radio API verification
 
@@ -46,18 +64,33 @@ flutter build apk --debug
 ```
 
 Automated gates were last run on 2026-09-23 with Flutter 3.44.0 and all passed: formatting,
-`flutter analyze`, 18 unit/widget tests, the integration smoke test on the Android emulator,
+`flutter analyze`, 34 unit/widget tests, the integration smoke test on the Android emulator,
 and the debug APK build. Playback in the emulator was additionally confirmed manually.
 Test fixtures serve HTTP responses with an explicit `charset=utf-8` header so
 non-ASCII episode titles decode identically on host and device.
 
+### Releases
+
+Cutting a release is tag-driven (`.github/workflows/release.yml`):
+
+```sh
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+The workflow runs analyze/tests, builds split-per-ABI and universal release APKs with
+`--dart-define=APP_VERSION=${{ github.ref_name }}` (so the git tag becomes the on-screen
+version), and publishes them to a GitHub Release. The artifacts are unsigned until signing
+is configured; to enable signed releases, add `KEYSTORE_BASE64` and `KEYSTORE_PASSWORD`
+repository secrets, keystore decode/`key.properties` steps in the workflow, and matching
+Gradle signing configuration.
+
 ### Add another curated show
 
-Add a `PodcastProgram` item to `lib/src/podcast/data/podcast_catalog.dart`,
-using the official API's verified program ID, name, canonical page URL, and
-optional image URL. The initial app screen currently selects the first catalog entry.
-Do not derive IDs from page slugs; confirm the program record and its episode
-audio fields from the API before adding a program.
+Open the in-app search (magnifier icon), type the show's name, and tap the bookmark
+icon to subscribe — it then appears on the home screen. Programmatically, the catalog
+in `lib/src/podcast/data/podcast_catalog.dart` only defines the first-run seed; use
+the official API's verified program ID and fields, and confirm the program record and
+its episode audio fields from the API before relying on it.
 
 ### Playback notes
 

@@ -1,0 +1,37 @@
+{
+  "programs": [
+    {
+      "id": 5386,
+      "name": "Radiokorrespondenterna Kina",
+      "description": "Radiokorrespondenterna Kina tar med lyssnaren in i maktspelet mellan öst och väst.",
+      "programurl": "https://www.sverigesradio.se/radiokorrespondenterna-kina",
+      "programslug": "radiokorrespondenterna-kina",
+      "programimage": "https://static-cdn.sr.se/images/5386/62b8a260-203f-4d38-bbea-8ee9244137c1.jpg?preset=api-default-square",
+      "haspod": true
+    },
+    {
+      "id": 4957,
+      "name": "Kina och Keve i Barnradion",
+      "description": "Vardagsberättelser för de allra minsta barnen.",
+      "programurl": "https://www.sverigesradio.se/kinaochkeveibarnradion",
+      "haspod": true
+    },
+    {
+      "id": 78,
+      "name": "Nyheter P4 Jämtland",
+      "programurl": "https://www.sverigesradio.se/nyheter/p4-jamtland",
+      "haspod": true
+    },
+    {
+      "id": 179,
+      "name": "Radiosporten",
+      "description": "Senaste nyheterna från Sveriges Radios sportredaktion.",
+      "programurl": "https://www.sverigesradio.se/radiosporten",
+      "haspod": false
+    },
+    {
+      "id": 999999,
+      "name": ""
+    }
+  ]
+}

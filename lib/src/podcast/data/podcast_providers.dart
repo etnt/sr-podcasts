@@ -20,3 +20,10 @@ final episodesProvider =
       (ref, program) => ref.watch(srApiClientProvider).fetchEpisodes(program),
       retry: (retryCount, error) => null,
     );
+
+/// In-memory cache of the full SR program catalog used by search. Fetched
+/// once per session (~842 KB) and reused for every keystroke.
+final allProgramsProvider = FutureProvider<List<PodcastProgram>>(
+  (ref) => ref.watch(srApiClientProvider).fetchAllPrograms(),
+  retry: (retryCount, error) => null,
+);

@@ -1,7 +1,7 @@
 name: podcastshortcut
 description: "A quick-access player for selected Sveriges Radio podcasts."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.12.0
@@ -14,6 +14,7 @@ dependencies:
   http: ^1.6.0
   just_audio: ^0.10.6
   just_audio_background: ^0.0.1-beta.17
+  shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
 
 dev_dependencies:

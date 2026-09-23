@@ -16,6 +16,13 @@ void main() {
           )
           as Map<String, dynamic>;
 
+  // Builds UTF-8 JSON responses the way the real SR API serves them.
+  http.Response jsonResponse(Object json) => http.Response.bytes(
+    utf8.encode(jsonEncode(json)),
+    200,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+
   group('SrApiClient.fetchEpisodes', () {
     test('parses actual SR fixture and follows API pagination', () async {
       final requested = <Uri>[];
@@ -121,6 +128,60 @@ void main() {
         client.fetchEpisodes(podcastCatalog.first),
         throwsA(isA<SrApiException>()),
       );
+    });
+  });
+
+  group('SrApiClient.fetchAllPrograms', () {
+    test(
+      'parses the program corpus fixture and skips malformed entries',
+      () async {
+        final corpusFixture =
+            jsonDecode(
+                  File('test/fixtures/sr_programs.json').readAsStringSync(),
+                )
+                as Map<String, dynamic>;
+        final client = SrApiClient(
+          httpClient: MockClient(
+            (request) async => jsonResponse(corpusFixture),
+          ),
+        );
+        addTearDown(client.close);
+
+        final programs = await client.fetchAllPrograms();
+
+        expect(programs, hasLength(4));
+        expect(programs.first.id, 5386);
+        expect(programs.first.name, 'Radiokorrespondenterna Kina');
+        expect(programs.first.hasPod, isTrue);
+        expect(
+          programs.first.description,
+          contains('maktspelet mellan öst och väst'),
+        );
+        expect(programs[1].imageUrl, isNull);
+        expect(programs.where((program) => program.hasPod), hasLength(3));
+      },
+    );
+
+    test('surfaces HTTP errors to the caller', () async {
+      final client = SrApiClient(
+        httpClient: MockClient((request) async => http.Response('down', 503)),
+      );
+      addTearDown(client.close);
+
+      expect(() => client.fetchAllPrograms(), throwsA(isA<SrApiException>()));
+    });
+
+    test('rejects malformed JSON and missing program lists', () async {
+      for (final body in ['not json', '{"unexpected":[]}']) {
+        final client = SrApiClient(
+          httpClient: MockClient((request) async => http.Response(body, 200)),
+        );
+        addTearDown(client.close);
+        await expectLater(
+          client.fetchAllPrograms(),
+          throwsA(isA<SrApiException>()),
+        );
+      }
     });
   });
 }
