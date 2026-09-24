@@ -8,6 +8,13 @@
         android:label="SR Podcasts"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Android Auto discovery: declares this app as a media app.
+             Points at res/xml/automotive_app_desc.xml (<uses name="media"/>).
+             Without this, the app never appears on the car's screen. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <activity
             android:name="com.ryanheise.audioservice.AudioServiceActivity"
             android:exported="true"
