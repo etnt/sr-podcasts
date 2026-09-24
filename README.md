@@ -148,6 +148,10 @@ The app appears in Android Auto on the car screen. The car shows its own
 media screens, not the app's phone UI. You browse your saved shows, pick an
 episode, and control playback with the car's buttons.
 
+To keep car browsing responsive, Android Auto shows the latest API page, up
+to 100 episodes per show. The phone UI can still load the complete episode
+history.
+
 The app declares itself as a media app for Android Auto in
 `android/app/src/main/res/xml/automotive_app_desc.xml`. The manifest points
 at that file with the `com.google.android.gms.car.application` meta-data.
@@ -156,13 +160,20 @@ media service is registered.
 
 Things to check if the app does not show up in the car:
 
-- Install a release APK, not the debug APK. Android Auto hides apps that are
-  installed from outside Google Play unless you allow unknown sources. To
-  test a debug build, enable developer settings in the Android Auto app on
-  the phone (tap the Android Auto version ten times) and turn on
-  `Unknown sources`. Then restart the car connection.
+- APKs downloaded from GitHub are installed outside Google Play, including
+  release APKs. Android Auto hides all such sideloaded apps unless you enable
+  its own developer mode and allow `Unknown sources`. On a Pixel, open
+  `Settings` → `Connected devices` → `Connection preferences` →
+  `Android Auto` (or search Settings for `Android Auto`). At the bottom,
+  expand `Version and permission info` and tap it ten times, accept the
+  developer-settings prompt, then open the three-dot menu →
+  `Developer settings` and enable `Unknown sources`. This is Android Auto's
+  hidden setting, not Android's regular `Install unknown apps` permission.
+- Open Android Auto's `Customize launcher` settings and make sure
+  `SR Podcasts` is enabled.
 - Disconnect and reconnect the USB cable, or restart the phone, after you
-  install a new build. The car reads the app list when the connection starts.
+  change these settings or install a new build. The car reads the app list
+  when the connection starts.
 
 ## Playback
 

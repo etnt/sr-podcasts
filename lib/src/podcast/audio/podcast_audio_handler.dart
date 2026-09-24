@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -156,9 +158,11 @@ class PodcastAudioHandler extends BaseAudioHandler
   Future<void> stop() => _player.stop();
 
   /// The single playback path shared by the car callbacks and, through
-  /// [AudioServicePodcastPlayer], the phone UI: loads the show's playable
-  /// episodes as one concatenated source, publishes them as the queue, and
-  /// starts at the chosen episode.
+  /// [AudioServicePodcastPlayer], the phone UI: publishes the show's playable
+  /// episodes as the queue and starts at the chosen episode. Only the selected
+  /// URL is loaded into just_audio; the audio_service queue supplies car
+  /// navigation. This keeps the Android Auto callback fast even for shows with
+  /// hundreds of episodes.
   Future<void> _playEpisode(
     PodcastEpisode episode,
     PodcastProgram program, {
@@ -181,10 +185,9 @@ class PodcastAudioHandler extends BaseAudioHandler
     queueTitle.add(program.name);
     mediaItem.add(mediaItems[_queueIndex]);
     playbackState.add(playbackState.value.copyWith(queueIndex: _queueIndex));
-    await _player.setAudioSources([
-      for (final candidate in playable) AudioSource.uri(candidate.audioUrl!),
-    ], initialIndex: currentIndex < 0 ? 0 : currentIndex);
-    if (autoplay) await _player.play();
+    await _player.stop();
+    await _player.setAudioSource(AudioSource.uri(audioUrl), preload: false);
+    if (autoplay) unawaited(_startPlayback());
   }
 
   /// Publishes the show's episode list as the current queue around the
@@ -216,7 +219,9 @@ class PodcastAudioHandler extends BaseAudioHandler
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    unawaited(_startPlayback());
+  }
 
   @override
   Future<void> pause() => _player.pause();
@@ -271,7 +276,9 @@ class PodcastAudioHandler extends BaseAudioHandler
   Future<List<PodcastEpisode>> _episodesFor(PodcastProgram program) async {
     final cached = _episodeCache[program.id];
     if (cached != null) return cached;
-    final episodes = await apiClient.fetchEpisodes(program);
+    // The car only needs the latest episodes. Fetching every historical page
+    // can exceed Android Auto's browse timeout for long-running shows.
+    final episodes = await apiClient.fetchEpisodes(program, pageLimit: 1);
     return _episodeCache[program.id] = episodes;
   }
 
@@ -315,11 +322,19 @@ class PodcastAudioHandler extends BaseAudioHandler
   /// that the media notification and Android Auto read.
   void _broadcastState(PlaybackEvent event) {
     final playing = _player.playing;
+    final hasPrevious = _queueIndex > 0;
+    final hasNext = _queueIndex + 1 < queue.value.length;
+    final controls = [
+      if (hasPrevious) MediaControl.skipToPrevious,
+      if (playing) MediaControl.pause else MediaControl.play,
+      if (hasNext) MediaControl.skipToNext,
+    ];
     playbackState.add(
       playbackState.value.copyWith(
-        controls: [
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.stop,
+        controls: controls,
+        androidCompactActionIndices: [
+          for (var index = 0; index < controls.length && index < 3; index++)
+            index,
         ],
         systemActions: const {MediaAction.seek},
         processingState: switch (_player.processingState) {
@@ -336,5 +351,21 @@ class PodcastAudioHandler extends BaseAudioHandler
         queueIndex: _queueIndex,
       ),
     );
+  }
+
+  Future<void> _startPlayback() async {
+    try {
+      await _player.play();
+    } catch (error) {
+      debugPrint('PodcastAudioHandler: playback failed: $error');
+      playbackState.add(
+        playbackState.value.copyWith(
+          processingState: AudioProcessingState.error,
+          playing: false,
+          errorCode: 1,
+          errorMessage: 'Unable to play this episode.',
+        ),
+      );
+    }
   }
 }

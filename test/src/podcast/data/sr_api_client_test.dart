@@ -75,6 +75,31 @@ void main() {
       expect(await client.fetchEpisodes(podcastCatalog.first), isEmpty);
     });
 
+    test('stops at the requested page limit', () async {
+      var requests = 0;
+      final client = SrApiClient(
+        httpClient: MockClient((request) async {
+          requests++;
+          return jsonResponse({
+            'episodes': [_episodeJsonForPageLimit(requests)],
+            'pagination': {
+              'nextpage':
+                  'https://api.sr.se/v2/episodes/index?programid=5386&format=json&page=${requests + 1}',
+            },
+          });
+        }),
+      );
+      addTearDown(client.close);
+
+      final episodes = await client.fetchEpisodes(
+        podcastCatalog.first,
+        pageLimit: 1,
+      );
+
+      expect(requests, 1);
+      expect(episodes, hasLength(1));
+    });
+
     test('exposes HTTP errors to the caller', () async {
       final client = SrApiClient(
         httpClient: MockClient(
@@ -185,3 +210,13 @@ void main() {
     });
   });
 }
+
+Map<String, dynamic> _episodeJsonForPageLimit(int id) => {
+  'id': id,
+  'title': 'Episode $id',
+  'publishdateutc': '/Date(1700000000000+0200)/',
+  'listenpodfile': {
+    'url': 'https://podfile.cloud/audio$id.mp3',
+    'duration': 600,
+  },
+};

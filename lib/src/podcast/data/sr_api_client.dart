@@ -22,7 +22,14 @@ class SrApiClient {
 
   final http.Client _httpClient;
 
-  Future<List<PodcastEpisode>> fetchEpisodes(PodcastProgram program) async {
+  Future<List<PodcastEpisode>> fetchEpisodes(
+    PodcastProgram program, {
+    int? pageLimit,
+  }) async {
+    if (pageLimit != null && pageLimit < 1) {
+      throw ArgumentError.value(pageLimit, 'pageLimit', 'Must be positive.');
+    }
+    final maximumPages = pageLimit ?? 100;
     final episodes = <PodcastEpisode>[];
     var pageUri = _apiRoot.replace(
       path: '/api/v2/episodes/index',
@@ -34,8 +41,7 @@ class SrApiClient {
     );
     final visitedPages = <Uri>{};
 
-    // Fetch at most 100 pages to avoid an accidental unbounded pagination loop.
-    for (var page = 0; page < 100; page++) {
+    for (var page = 0; page < maximumPages; page++) {
       if (!visitedPages.add(pageUri)) {
         throw const SrApiException(
           'Sveriges Radio returned a repeated page link.',
@@ -86,6 +92,7 @@ class SrApiClient {
           ? pagination['nextpage']
           : null;
       if (nextPage is! String || nextPage.isEmpty) return episodes;
+      if (pageLimit != null && page + 1 >= maximumPages) return episodes;
       final parsedNextPage = Uri.tryParse(nextPage);
       if (parsedNextPage == null ||
           parsedNextPage.scheme != 'https' ||
