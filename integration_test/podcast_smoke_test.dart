@@ -12,6 +12,8 @@ import 'package:podcastshortcut/src/podcast/audio/podcast_playback.dart';
 import 'package:podcastshortcut/src/podcast/audio/podcast_player.dart';
 import 'package:podcastshortcut/src/podcast/data/podcast_providers.dart';
 import 'package:podcastshortcut/src/podcast/data/subscriptions.dart';
+import 'package:podcastshortcut/src/podcast/domain/podcast_episode.dart';
+import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Offline fake used by the integration smoke test. Kept in this file
@@ -79,6 +81,13 @@ class _FakePodcastPlayer implements PodcastPlayer {
     await _position.close();
     await _duration.close();
   }
+
+  @override
+  Future<void> publishQueue({
+    required PodcastEpisode episode,
+    required PodcastProgram program,
+    required List<PodcastEpisode> episodes,
+  }) async {}
 }
 
 /// Builds a UTF-8 JSON response the way the real SR API serves them.

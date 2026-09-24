@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:podcastshortcut/src/podcast/domain/podcast_episode.dart';
+import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
 import 'package:podcastshortcut/src/podcast/audio/podcast_player.dart';
 
 /// A broadcast stream that always replays its latest value to new listeners
@@ -130,4 +132,16 @@ class FakePodcastPlayer implements PodcastPlayer {
     await _position.close();
     await _duration.close();
   }
+
+  @override
+  Future<void> publishQueue({
+    required PodcastEpisode episode,
+    required PodcastProgram program,
+    required List<PodcastEpisode> episodes,
+  }) async {
+    publishedQueues.add(episodes);
+  }
+
+  /// Queues observed through [publishQueue], for assertions in tests.
+  final List<List<PodcastEpisode>> publishedQueues = [];
 }

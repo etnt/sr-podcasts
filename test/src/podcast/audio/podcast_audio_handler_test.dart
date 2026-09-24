@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 import 'package:podcastshortcut/src/podcast/audio/podcast_audio_handler.dart';
 import 'package:podcastshortcut/src/podcast/data/sr_api_client.dart';
+import 'package:podcastshortcut/src/podcast/domain/podcast_episode.dart';
 import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
 
 /// just_audio's AudioPlayer binds to platform channels at construction.
@@ -198,6 +199,70 @@ void main() {
 
       expect(callCount(), 1);
       expect(handler.episodeIndex, isEmpty);
+    });
+  });
+
+  group('publishQueue', () {
+    test(
+      'exposes the show queue, title, and current index for the car',
+      () async {
+        final (client, callCount) = _clientServing([]);
+        final handler = _handler(client, [_program()]);
+        final episode1 = PodcastEpisode(
+          id: 11,
+          title: 'Episode 11',
+          audioUrl: Uri.parse('https://podfile.cloud/audio11.mp3'),
+        );
+        final episode2 = PodcastEpisode(
+          id: 12,
+          title: 'Episode 12',
+          audioUrl: Uri.parse('https://podfile.cloud/audio12.mp3'),
+        );
+
+        await handler.publishQueue(
+          episode: episode2,
+          program: _program(),
+          episodes: [episode1, episode2],
+        );
+
+        expect(handler.queue.value.map((item) => item.id), [
+          'episode:11',
+          'episode:12',
+        ]);
+        expect(handler.queueTitle.value, 'Radiokorrespondenterna Kina');
+        expect(handler.playbackState.value.queueIndex, 1);
+        expect(handler.mediaItem.value?.id, 'episode:12');
+        expect(handler.mediaItem.value?.album, 'Radiokorrespondenterna Kina');
+        // Publishing the queue must not fetch anything; the phone already has
+        // the episode list from the screen.
+        expect(callCount(), 0);
+      },
+    );
+
+    test('an unknown episode leaves the queue untouched', () async {
+      final (client, callCount) = _clientServing([]);
+      final handler = _handler(client, [_program()]);
+      final episode1 = PodcastEpisode(
+        id: 11,
+        title: 'Episode 11',
+        audioUrl: Uri.parse('https://podfile.cloud/audio11.mp3'),
+      );
+      final stranger = PodcastEpisode(
+        id: 99,
+        title: 'Episode 99',
+        audioUrl: Uri.parse('https://podfile.cloud/audio99.mp3'),
+      );
+
+      await handler.publishQueue(
+        episode: stranger,
+        program: _program(),
+        episodes: [episode1],
+      );
+
+      expect(handler.queue.value, isEmpty);
+      expect(handler.mediaItem.value, isNull);
+      expect(handler.episodeIndex, isEmpty);
+      expect(callCount(), 0);
     });
   });
 }

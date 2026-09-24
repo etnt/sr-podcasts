@@ -1,6 +1,8 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../domain/podcast_episode.dart';
+import '../domain/podcast_program.dart';
 import 'podcast_audio_handler.dart';
 
 /// Player operations needed by the podcast UI, abstracted so tests can
@@ -19,6 +21,15 @@ abstract interface class PodcastPlayer {
     required String title,
     String? artist,
     Uri? artUri,
+  });
+
+  /// Publishes [episodes] of [program] as the playback queue around the
+  /// already-loaded [episode], so remote controllers such as Android Auto
+  /// can step between episodes when playback was started on the phone.
+  Future<void> publishQueue({
+    required PodcastEpisode episode,
+    required PodcastProgram program,
+    required List<PodcastEpisode> episodes,
   });
 
   Future<void> play();
@@ -82,4 +93,15 @@ class AudioServicePodcastPlayer implements PodcastPlayer {
 
   @override
   Future<void> dispose() => _player.dispose();
+
+  @override
+  Future<void> publishQueue({
+    required PodcastEpisode episode,
+    required PodcastProgram program,
+    required List<PodcastEpisode> episodes,
+  }) => _handler.publishQueue(
+    episode: episode,
+    program: program,
+    episodes: episodes,
+  );
 }

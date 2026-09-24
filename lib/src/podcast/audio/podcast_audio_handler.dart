@@ -96,6 +96,11 @@ class PodcastAudioHandler extends BaseAudioHandler
   Map<String, (PodcastEpisode, PodcastProgram)> get episodeIndex =>
       _episodeIndex;
 
+  /// Index of the current item within the published queue. The player's own
+  /// sequence index is unreliable for the phone path, which loads a single
+  /// source, so the handler tracks it itself.
+  int _queueIndex = 0;
+
   /// The single player owned by the handler. The phone UI reaches it only
   /// through [AudioServicePodcastPlayer]; the car reaches it through the
   /// callbacks of this handler.
@@ -171,13 +176,43 @@ class PodcastAudioHandler extends BaseAudioHandler
     final currentIndex = playable.indexWhere(
       (candidate) => candidate.id == episode.id,
     );
+    _queueIndex = currentIndex < 0 ? 0 : currentIndex;
     queue.add(mediaItems);
     queueTitle.add(program.name);
-    mediaItem.add(mediaItems[currentIndex < 0 ? 0 : currentIndex]);
+    mediaItem.add(mediaItems[_queueIndex]);
+    playbackState.add(playbackState.value.copyWith(queueIndex: _queueIndex));
     await _player.setAudioSources([
       for (final candidate in playable) AudioSource.uri(candidate.audioUrl!),
     ], initialIndex: currentIndex < 0 ? 0 : currentIndex);
     if (autoplay) await _player.play();
+  }
+
+  /// Publishes the show's episode list as the current queue around the
+  /// already-loaded [episode] so remote controllers (Android Auto) can step
+  /// between episodes when playback was started on the phone. Never touches
+  /// the player; the episode is already loaded and playing.
+  Future<void> publishQueue({
+    required PodcastEpisode episode,
+    required PodcastProgram program,
+    required List<PodcastEpisode> episodes,
+  }) async {
+    _episodeCache.putIfAbsent(program.id, () => episodes);
+    final playable = [
+      for (final candidate in episodes)
+        if (candidate.isPlayable) candidate,
+    ];
+    final index = playable.indexWhere(
+      (candidate) => candidate.id == episode.id,
+    );
+    if (index < 0) return;
+    final mediaItems = [
+      for (final candidate in playable) _episodeToMediaItem(candidate, program),
+    ];
+    _queueIndex = index;
+    queue.add(mediaItems);
+    queueTitle.add(program.name);
+    mediaItem.add(mediaItems[index]);
+    playbackState.add(playbackState.value.copyWith(queueIndex: _queueIndex));
   }
 
   @override
@@ -298,7 +333,7 @@ class PodcastAudioHandler extends BaseAudioHandler
         updatePosition: _player.position,
         bufferedPosition: _player.bufferedPosition,
         speed: _player.speed,
-        queueIndex: event.currentIndex,
+        queueIndex: _queueIndex,
       ),
     );
   }

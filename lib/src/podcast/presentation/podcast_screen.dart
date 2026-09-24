@@ -54,7 +54,7 @@ class PodcastScreen extends ConsumerWidget {
                     ? const _ScrollableMessage(
                         child: Text('No episodes are currently available.'),
                       )
-                    : _EpisodeList(episodes: items),
+                    : _EpisodeList(episodes: items, program: selectedProgram),
               ),
             ),
           ),
@@ -211,9 +211,10 @@ class _LoadError extends StatelessWidget {
 }
 
 class _EpisodeList extends StatelessWidget {
-  const _EpisodeList({required this.episodes});
+  const _EpisodeList({required this.episodes, required this.program});
 
   final List<PodcastEpisode> episodes;
+  final PodcastProgram program;
 
   @override
   Widget build(BuildContext context) => ListView.separated(
@@ -221,14 +222,24 @@ class _EpisodeList extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
     itemCount: episodes.length,
     separatorBuilder: (context, index) => const SizedBox(height: 4),
-    itemBuilder: (context, index) => _EpisodeTile(episode: episodes[index]),
+    itemBuilder: (context, index) => _EpisodeTile(
+      episode: episodes[index],
+      program: program,
+      episodes: episodes,
+    ),
   );
 }
 
 class _EpisodeTile extends ConsumerWidget {
-  const _EpisodeTile({required this.episode});
+  const _EpisodeTile({
+    required this.episode,
+    required this.program,
+    required this.episodes,
+  });
 
   final PodcastEpisode episode;
+  final PodcastProgram program;
+  final List<PodcastEpisode> episodes;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -279,12 +290,16 @@ class _EpisodeTile extends ConsumerWidget {
               ? 'Play ${episode.title}'
               : 'Open episode on Sveriges Radio',
           onPressed: episode.isPlayable
-              ? () => ref.read(playbackProvider.notifier).playEpisode(episode)
+              ? () => ref
+                    .read(playbackProvider.notifier)
+                    .playEpisode(episode, program: program, queue: episodes)
               : () => _openEpisode(context, episode),
           icon: Icon(episode.isPlayable ? Icons.play_arrow : Icons.open_in_new),
         ),
         onTap: episode.isPlayable
-            ? () => ref.read(playbackProvider.notifier).playEpisode(episode)
+            ? () => ref
+                  .read(playbackProvider.notifier)
+                  .playEpisode(episode, program: program, queue: episodes)
             : () => _openEpisode(context, episode),
       ),
     );
