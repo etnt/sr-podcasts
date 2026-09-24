@@ -42,8 +42,12 @@ The recommendation:
    a custom `AudioHandler` that implements the Android Auto browse callbacks
    (`getChildren`, `playFromMediaId`, `playMediaItem`).
 3. Serve the browse tree: root → subscribed shows → latest episodes.
-4. No manifest changes are needed. The `MediaBrowserService` intent filter is
-   already registered for `com.ryanheise.audioservice.AudioService`.
+4. The `MediaBrowserService` intent filter is already registered for
+   `com.ryanheise.audioservice.AudioService`. Android Auto additionally
+   requires a `com.google.android.gms.car.application` meta-data with
+   `res/xml/automotive_app_desc.xml` declaring `<uses name="media"/>`
+   (see https://developer.android.com/training/cars/media/auto); without
+   that declaration the car never lists the app.
 
 This gives the app a place in the car's media app list, a native player screen
 with the current episode, a browse screen with the show list, next/previous

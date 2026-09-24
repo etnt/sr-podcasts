@@ -142,11 +142,33 @@ the first app start. Make sure that the API returns the program record and the
 audio field for a show before you rely on it. Do not guess the program ID from
 the page address.
 
+## Use the app in the car
+
+The app appears in Android Auto on the car screen. The car shows its own
+media screens, not the app's phone UI. You browse your saved shows, pick an
+episode, and control playback with the car's buttons.
+
+The app declares itself as a media app for Android Auto in
+`android/app/src/main/res/xml/automotive_app_desc.xml`. The manifest points
+at that file with the `com.google.android.gms.car.application` meta-data.
+Without that declaration Android Auto does not list the app, even when the
+media service is registered.
+
+Things to check if the app does not show up in the car:
+
+- Install a release APK, not the debug APK. Android Auto hides apps that are
+  installed from outside Google Play unless you allow unknown sources. To
+  test a debug build, enable developer settings in the Android Auto app on
+  the phone (tap the Android Auto version ten times) and turn on
+  `Unknown sources`. Then restart the car connection.
+- Disconnect and reconnect the USB cable, or restart the phone, after you
+  install a new build. The car reads the app list when the connection starts.
+
 ## Playback
 
-The app plays audio with `just_audio` and `just_audio_background`. They
-provide one media session and the media notification. The player code sits
-behind the `PodcastPlayer` interface in
+The app plays audio with `just_audio` and `audio_service`. They provide one
+media session, the media notification, and the Android Auto browse tree. The
+player code sits behind the `PodcastPlayer` interface in
 `lib/src/podcast/audio/podcast_player.dart`. Tests use an in-memory fake
 player, so they run without audio hardware.
 
