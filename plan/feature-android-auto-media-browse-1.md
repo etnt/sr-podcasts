@@ -63,6 +63,8 @@ The result: the app appears in the car's media app list, the car renders its nat
 | TASK-011 | Override `playFromMediaId(String mediaId, [Map<String, dynamic>? extras])` to resolve the id and delegate to `playMediaItem` (car hosts may use either entry point), and override `playFromSearch(String query, [Map<String, dynamic>? extras])` to match the query case-insensitively as a substring of a subscription name and start the latest playable episode of the first match; no match is a no-op. | ✅ | 2026-09-23 |
 | TASK-012 | Ensure next/previous work from the car: keep `QueueHandler`'s queue logic and wire `_player` sequence state so `skipToNext`/`skipToPrevious` move within the queued episode list of the current show. Verify car-initiated playback state shows up in the phone UI streams consumed by `AudioServicePodcastPlayer` (TASK-005). | ✅ | 2026-09-23 |
 | TASK-013 | Fix car discovery found missing during real-car testing (2026-09-24): Android Auto never listed the app because the manifest lacked the Android Auto media declaration. Add `/Users/ttornkvi/git/my-podcasts/android/app/src/main/res/xml/automotive_app_desc.xml` with `<automotiveApp><uses name="media"/></automotiveApp>` and a `com.google.android.gms.car.application` meta-data pointing at it in the manifest. Corrected the earlier "no manifest changes needed" assumption in FILE-007 and the research document. | ✅ | 2026-09-24 |
+| TASK-014 | Diagnose v1.1.1 still not appearing after TASK-013. Inspect the published universal APK and confirm that its merged manifest contains the automotive meta-data, exported `AudioService`, and `MediaBrowserService` intent. Document that every GitHub release APK is sideloaded and therefore hidden by Android Auto until its developer setting `Unknown sources` is enabled; add the same warning to future GitHub release notes. | ✅ | 2026-09-24 |
+| TASK-015 | Fix real-car browse and playback timeouts: limit the car handler to the latest SR API page instead of downloading up to the full history (896 episodes for Vetenskapsradion Historia), load only the selected URL into `just_audio`, return from car play callbacks without awaiting the episode-long `AudioPlayer.play()` future, and publish previous/play-pause/next controls for Android Auto and its dashboard card. | ✅ | 2026-09-24 |
 
 **Phase 2 completion criteria:** a head unit (DHU or Automotive OS emulator) lists the app, shows the subscription grid, lists episodes of a show, and starts playback from the car; the phone UI reflects the same playback state.
 
@@ -104,6 +106,7 @@ The result: the app appears in the car's media app list, the car renders its nat
 - **RISK-002**: `audio_service`'s browse callbacks run on the service side and are async; a slow or failing SR fetch on first browse could make the car show an empty show page. Mitigation: cache in `_episodeCache`, return empty on failure, and never throw from `getChildren` (TASK-008).
 - **RISK-003**: The car host may call `playFromMediaId` instead of `playMediaItem`, or call `getChildren` for the root before subscriptions exist. Mitigation: implement both entry points (TASK-011) and always answer the root (TASK-008).
 - **RISK-004**: Media-item art URLs are remote; cars with poor connectivity may show blank artwork. Accepted: images are optional in the SR API already; no artwork caching in this plan.
+- **RISK-005**: GitHub release APKs are sideloaded outside Google Play. Android Auto hides sideloaded debug and release builds unless the phone's Android Auto developer setting `Unknown sources` is enabled. Mitigation: document the required setting in the README and every GitHub release.
 - **ASSUMPTION-001**: SR episode ids are stable and unique across programs; the `episode:<id>` media id scheme relies on this, as does `_episodeIndex`.
 - **ASSUMPTION-002**: The user's car head unit runs Android Auto (projected) or a compatible skin. The DHU verification is indicative; behavior on the user's specific car is confirmed only by TEST-004 in the real car.
 - **ASSUMPTION-003**: `audio_service` 0.18.x's `BaseAudioHandler` browse surface (`getChildren`, `playFromMediaId`, `playMediaItem`, `playFromSearch`, `androidBrowsableRootExtras`) is sufficient for the car flow, as verified in the research phase against the pub-cache source.
@@ -117,7 +120,5 @@ The result: the app appears in the car's media app list, the car renders its nat
 - `audio_service` package and Android Auto setup: https://pub.dev/packages/audio_service
 - Android developers, "Media apps for cars overview": https://developer.android.com/training/cars/media
 - Android Auto Desktop Head Unit testing: https://developer.android.com/training/cars/testing
-
-
 
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
@@ -15,17 +16,34 @@ import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
 /// The tests install a fake platform so a real AudioPlayer object can be
 /// created without native audio; the browse-tree logic never loads audio.
 class _FakeJustAudioPlatform extends JustAudioPlatform {
+  final players = <_FakeAudioPlayerPlatform>[];
+
   @override
-  Future<AudioPlayerPlatform> init(InitRequest request) async =>
-      _FakeAudioPlayerPlatform(request.id);
+  Future<AudioPlayerPlatform> init(InitRequest request) async {
+    final player = _FakeAudioPlayerPlatform(request.id);
+    players.add(player);
+    return player;
+  }
 }
 
 class _FakeAudioPlayerPlatform extends AudioPlayerPlatform {
   _FakeAudioPlayerPlatform(super.id);
 
+  final playCompleter = Completer<PlayResponse>();
+
   @override
   Stream<PlaybackEventMessage> get playbackEventMessageStream =>
       const Stream<PlaybackEventMessage>.empty();
+
+  @override
+  Future<LoadResponse> load(LoadRequest request) async =>
+      LoadResponse(duration: const Duration(minutes: 10));
+
+  @override
+  Future<PlayResponse> play(PlayRequest request) => playCompleter.future;
+
+  @override
+  Future<PauseResponse> pause(PauseRequest request) async => PauseResponse();
 }
 
 PodcastProgram _program({int id = 5386, Uri? imageUrl}) => PodcastProgram(
@@ -76,7 +94,8 @@ PodcastAudioHandler _handler(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  JustAudioPlatform.instance = _FakeJustAudioPlatform();
+  final fakeAudioPlatform = _FakeJustAudioPlatform();
+  JustAudioPlatform.instance = fakeAudioPlatform;
 
   group('getChildren root', () {
     test('returns one browsable item per subscription', () async {
@@ -115,6 +134,32 @@ void main() {
       // The unplayable episode 12 is filtered out.
       expect(first.map((item) => item.id), ['episode:11', 'episode:13']);
       expect(second.map((item) => item.id), first.map((item) => item.id));
+    });
+
+    test('fetches only the latest API page for the car', () async {
+      var calls = 0;
+      final client = SrApiClient(
+        httpClient: MockClient((request) async {
+          calls++;
+          return http.Response(
+            jsonEncode({
+              'episodes': [_episodeJson(11)],
+              'pagination': {
+                'nextpage':
+                    'https://api.sr.se/v2/episodes/index?programid=5386&format=json&page=2',
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+      final handler = _handler(client, [_program()]);
+
+      final children = await handler.getChildren('show:5386');
+
+      expect(children, hasLength(1));
+      expect(calls, 1);
     });
 
     test(
@@ -173,6 +218,35 @@ void main() {
         );
 
         expect(callCount(), 0);
+      },
+    );
+
+    test(
+      'playMediaItem returns while playback continues and loads one URL',
+      () async {
+        final (client, _) = _clientServing([
+          _episodeJson(11),
+          _episodeJson(12),
+        ]);
+        final handler = _handler(client, [_program()]);
+        final item = (await handler.getChildren('show:5386')).first;
+
+        await handler.playMediaItem(item).timeout(const Duration(seconds: 1));
+
+        expect(handler.player.audioSources, hasLength(1));
+        expect(handler.mediaItem.value?.id, 'episode:11');
+        expect(handler.queue.value, hasLength(2));
+        expect(handler.player.playing, isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(fakeAudioPlatform.players, isNotEmpty);
+        expect(
+          fakeAudioPlatform.players.last.playCompleter.isCompleted,
+          isFalse,
+        );
+        expect(
+          handler.playbackState.value.controls,
+          containsAll([MediaControl.pause, MediaControl.skipToNext]),
+        );
       },
     );
 

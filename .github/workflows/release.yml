@@ -72,6 +72,20 @@ jobs:
             build/app/outputs/flutter-apk/app-x86_64-release.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
+          body: |
+            ## Android Auto setup
+
+            GitHub release APKs are sideloaded outside Google Play. Android
+            Auto hides sideloaded apps by default, including release builds.
+
+            On a Pixel, open **Settings → Connected devices → Connection
+            preferences → Android Auto**. At the bottom, expand **Version and
+            permission info** and tap it ten times, accept the prompt, then
+            open the three-dot menu → **Developer settings** and enable
+            **Unknown sources**. This is Android Auto's hidden setting, not
+            Android's regular **Install unknown apps** permission. Then check
+            **Customize launcher** to ensure **SR Podcasts** is enabled and
+            reconnect the phone to the car.
 
       - name: Upload APK artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

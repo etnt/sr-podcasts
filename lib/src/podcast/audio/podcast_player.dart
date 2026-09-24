@@ -83,7 +83,7 @@ class AudioServicePodcastPlayer implements PodcastPlayer {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() => _handler.play();
 
   @override
   Future<void> pause() => _player.pause();
