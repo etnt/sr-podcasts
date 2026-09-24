@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/podcast_catalog.dart';
 import '../domain/podcast_episode.dart';
+import '../domain/podcast_program.dart';
 import 'podcast_audio_handler.dart';
 import 'podcast_player.dart';
 
@@ -34,7 +35,14 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   @override
   PlaybackState build() => const PlaybackState();
 
-  Future<void> playEpisode(PodcastEpisode episode) async {
+  /// Plays [episode]. When [program] and [queue] are given, the show's
+  /// episode list is published as the playback queue so remote controllers
+  /// such as Android Auto can step between episodes.
+  Future<void> playEpisode(
+    PodcastEpisode episode, {
+    PodcastProgram? program,
+    List<PodcastEpisode>? queue,
+  }) async {
     final audioUrl = episode.audioUrl;
     if (audioUrl == null) {
       state = PlaybackState(
@@ -46,15 +54,23 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
 
     state = PlaybackState(episode: episode, isLoading: true);
     final player = ref.read(podcastPlayerProvider);
+    final show = program ?? podcastCatalog.first;
     try {
       await player.setUrlAndPlay(
         audioUrl,
         id: episode.id.toString(),
-        album: podcastCatalog.first.name,
+        album: show.name,
         title: episode.title,
-        artist: podcastCatalog.first.name,
-        artUri: episode.imageUrl ?? podcastCatalog.first.imageUrl,
+        artist: show.name,
+        artUri: episode.imageUrl ?? show.imageUrl,
       );
+      if (program != null && queue != null) {
+        await player.publishQueue(
+          episode: episode,
+          program: program,
+          episodes: queue,
+        );
+      }
       state = PlaybackState(episode: episode);
       // play() completes when the media item ends; it should not block the UI.
       unawaited(_startPlayback(player, episode));
