@@ -21,6 +21,9 @@ release build shows the git tag.
 ## Screenshot
 
 <a href="screenshots/screenshot.jpeg"><img src="screenshots/screenshot.jpeg" alt="Screenshot" width="19%"></a>
+<a href="screenshots/sr-podcast-car.jpeg"><img src="screenshots/sr-podcast-car.jpeg" alt="Car creenshot" width="19%"></a>
+<a href="screenshots/sr-podcast-car-episode.jpeg"><img src="screenshots/sr-podcast-car-episode.jpeg" alt="Car episode creenshot" width="19%"></a>
+<a href="screenshots/sr-podcast-car-split.jpeg"><img src="screenshots/sr-podcast-car-split.jpeg" alt="Car split screenshot" width="19%"></a>
 
 ## Search and subscriptions
 
