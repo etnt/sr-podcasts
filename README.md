@@ -26,6 +26,10 @@ the car.
 <a href="screenshots/sr-podcast-car-episode.jpeg"><img src="screenshots/sr-podcast-car-episode.jpeg" alt="Car episode creenshot" width="19%"></a>
 <a href="screenshots/sr-podcast-car-split.jpeg"><img src="screenshots/sr-podcast-car-split.jpeg" alt="Car split screenshot" width="19%"></a>
 
+## Installation
+
+Download the APK package from the release page and install it on your Android phone.
+
 ## Search and subscriptions
 
 Tap the magnifier icon on the home screen to open the search screen. Type the
