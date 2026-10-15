@@ -32,6 +32,10 @@ abstract interface class PodcastPlayer {
     required List<PodcastEpisode> episodes,
   });
 
+  /// Jumps relative to the current position by [offset], clamped to the
+  /// audible range of the loaded episode.
+  Future<void> seekRelative(Duration offset);
+
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
@@ -90,6 +94,9 @@ class AudioServicePodcastPlayer implements PodcastPlayer {
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);
+
+  @override
+  Future<void> seekRelative(Duration offset) => _handler.seekRelative(offset);
 
   @override
   Future<void> dispose() => _player.dispose();

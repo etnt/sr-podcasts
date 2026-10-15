@@ -50,6 +50,14 @@ class EpisodePlayerControls extends ConsumerWidget {
               ],
               Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Back 15 seconds',
+                    onPressed: showProgress
+                        ? () =>
+                              ref.read(playbackProvider.notifier).skipBackward()
+                        : null,
+                    icon: const _SkipLabelIcon(forward: false),
+                  ),
                   IconButton.filledTonal(
                     tooltip: playback.isLoading
                         ? 'Loading episode'
@@ -74,20 +82,43 @@ class EpisodePlayerControls extends ConsumerWidget {
                           )
                         : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
                   ),
+                  IconButton(
+                    tooltip: 'Forward 15 seconds',
+                    onPressed: showProgress
+                        ? () =>
+                              ref.read(playbackProvider.notifier).skipForward()
+                        : null,
+                    icon: const _SkipLabelIcon(forward: true),
+                  ),
                   Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: showProgress
-                          ? duration.inMilliseconds.toDouble()
-                          : 1,
-                      value: showProgress
-                          ? clampedPosition.inMilliseconds.toDouble()
-                          : 0,
-                      onChanged: showProgress
-                          ? (value) => ref
-                                .read(playbackProvider.notifier)
-                                .seek(Duration(milliseconds: value.round()))
-                          : null,
+                    // The position readout lives in the same column as the
+                    // slider, so it stays aligned with its left edge without
+                    // hard-coded padding that would break under text scaling
+                    // or a different button layout.
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Slider(
+                          min: 0,
+                          max: showProgress
+                              ? duration.inMilliseconds.toDouble()
+                              : 1,
+                          value: showProgress
+                              ? clampedPosition.inMilliseconds.toDouble()
+                              : 0,
+                          onChanged: showProgress
+                              ? (value) => ref
+                                    .read(playbackProvider.notifier)
+                                    .seek(Duration(milliseconds: value.round()))
+                              : null,
+                        ),
+                        if (showProgress)
+                          Text(
+                            _formatDuration(clampedPosition),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                      ],
                     ),
                   ),
                   Text(
@@ -96,17 +127,6 @@ class EpisodePlayerControls extends ConsumerWidget {
                   ),
                 ],
               ),
-              if (showProgress)
-                Padding(
-                  padding: const EdgeInsets.only(left: 56, right: 44, top: 0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _formatDuration(clampedPosition),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -123,6 +143,39 @@ class EpisodePlayerControls extends ConsumerWidget {
       return '$hours:$remainingMinutes:$seconds';
     }
     return '$minutes:$seconds';
+  }
+}
+
+/// A circular skip arrow with a "15" label. Material ships no 15-second
+/// variants, so the 10/30-second shapes are labelled with the real value.
+class _SkipLabelIcon extends StatelessWidget {
+  const _SkipLabelIcon({required this.forward});
+
+  final bool forward;
+
+  @override
+  Widget build(BuildContext context) {
+    final arrow = Icon(Icons.replay, size: 30);
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          forward ? Transform.flip(flipX: true, child: arrow) : arrow,
+          Padding(
+            padding: const EdgeInsets.only(top: 9),
+            child: Text(
+              '15',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

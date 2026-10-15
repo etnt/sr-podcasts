@@ -45,9 +45,8 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   }) async {
     final audioUrl = episode.audioUrl;
     if (audioUrl == null) {
-      state = PlaybackState(
-        episode: state.episode,
-        errorMessage: 'This episode does not have a playable audio file.',
+      state = _errorState(
+        'This episode does not have a playable audio file.',
       );
       return;
     }
@@ -92,10 +91,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
         await player.play();
       }
     } catch (error) {
-      state = PlaybackState(
-        episode: state.episode,
-        errorMessage: 'Playback could not continue. Tap play to try again.',
-      );
+      state = _errorState('Playback could not continue. Tap play to try again.');
     }
   }
 
@@ -103,10 +99,32 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     try {
       await ref.read(podcastPlayerProvider).seek(position);
     } catch (error) {
-      state = PlaybackState(
-        episode: state.episode,
-        errorMessage: 'Could not seek in this episode.',
-      );
+      state = _errorState('Could not seek in this episode.');
+    }
+  }
+
+  /// A failed operation keeps the episode and the loading flag, so a failure
+  /// while an episode is still loading does not re-enable the play button.
+  PlaybackState _errorState(String message) => PlaybackState(
+    episode: state.episode,
+    isLoading: state.isLoading,
+    errorMessage: message,
+  );
+
+  /// Jumps 15 seconds back in the current episode.
+  Future<void> skipBackward() => _skip(-PodcastAudioHandler.skipInterval);
+
+  /// Jumps 15 seconds forward in the current episode.
+  Future<void> skipForward() => _skip(PodcastAudioHandler.skipInterval);
+
+  Future<void> _skip(Duration offset) async {
+    if (state.episode == null) return;
+    try {
+      await ref.read(podcastPlayerProvider).seekRelative(offset);
+    } catch (error) {
+      // Keep the loading flag so a failed skip while an episode is still
+      // loading does not re-enable the play button.
+      state = _errorState('Could not seek in this episode.');
     }
   }
 

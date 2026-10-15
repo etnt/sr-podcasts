@@ -46,6 +46,10 @@ class PodcastAudioHandler extends BaseAudioHandler
   /// Media id of the browse tree root.
   static const rootId = 'root';
 
+  /// Jump length shared by the media session's rewind/fast-forward controls
+  /// and the in-app skip buttons.
+  static const skipInterval = Duration(seconds: 15);
+
   static const _showIdPrefix = 'show:';
   static const _episodeIdPrefix = 'episode:';
 
@@ -156,6 +160,30 @@ class PodcastAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> stop() => _player.stop();
+
+  /// Jumps the player relative to its current position, clamped to the
+  /// audible range of the loaded audio. Both the media session's
+  /// rewind/fast-forward controls and the phone UI's player delegate here,
+  /// so the jump is computed from the player itself and never depends on
+  /// the queue MediaItem's duration, which phone-started playback does not
+  /// set and which car episodes may leave null.
+  Future<void> seekRelative(Duration offset) async {
+    var position = _player.position + offset;
+    if (position < Duration.zero) position = Duration.zero;
+    final duration = _player.duration;
+    if (duration != null && position > duration) position = duration;
+    await _player.seek(position);
+  }
+
+  /// Jumps 15 seconds back. Overrides the [SeekHandler] default, which
+  /// clamps against the MediaItem duration and treats a missing duration as
+  /// zero, snapping every jump to the start of the episode.
+  @override
+  Future<void> rewind() => seekRelative(-skipInterval);
+
+  /// Jumps 15 seconds forward. See [rewind].
+  @override
+  Future<void> fastForward() => seekRelative(skipInterval);
 
   /// The single playback path shared by the car callbacks and, through
   /// [AudioServicePodcastPlayer], the phone UI: publishes the show's playable
@@ -324,19 +352,26 @@ class PodcastAudioHandler extends BaseAudioHandler
     final playing = _player.playing;
     final hasPrevious = _queueIndex > 0;
     final hasNext = _queueIndex + 1 < queue.value.length;
+    final playPause = playing ? MediaControl.pause : MediaControl.play;
     final controls = [
       if (hasPrevious) MediaControl.skipToPrevious,
-      if (playing) MediaControl.pause else MediaControl.play,
+      MediaControl.rewind,
+      playPause,
+      MediaControl.fastForward,
       if (hasNext) MediaControl.skipToNext,
     ];
     playbackState.add(
       playbackState.value.copyWith(
         controls: controls,
-        androidCompactActionIndices: [
-          for (var index = 0; index < controls.length && index < 3; index++)
-            index,
-        ],
-        systemActions: const {MediaAction.seek},
+        // Android Auto and the notification show at most three compact
+        // slots; prefer the 15-second jumps around play/pause over
+        // episode changes, which stay available in the expanded layout.
+        androidCompactActionIndices: _compactActionIndices(controls, playPause),
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.rewind,
+          MediaAction.fastForward,
+        },
         processingState: switch (_player.processingState) {
           ProcessingState.idle => AudioProcessingState.idle,
           ProcessingState.loading => AudioProcessingState.loading,
@@ -352,6 +387,17 @@ class PodcastAudioHandler extends BaseAudioHandler
       ),
     );
   }
+
+  /// The three compact notification/Android Auto slots: rewind, play/pause,
+  /// and fast-forward, expressed as their real indices within [controls].
+  static List<int> _compactActionIndices(
+    List<MediaControl> controls,
+    MediaControl playPause,
+  ) => [
+    controls.indexOf(MediaControl.rewind),
+    controls.indexOf(playPause),
+    controls.indexOf(MediaControl.fastForward),
+  ];
 
   Future<void> _startPlayback() async {
     try {

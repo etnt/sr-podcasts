@@ -18,6 +18,9 @@ class _ValueStream<T> extends Stream<T> {
     if (_controller.hasListener) _controller.add(value);
   }
 
+  /// The latest value, for tests and fakes that read the current state.
+  T get value => _value;
+
   void reset() {
     _value = _initialValue;
     if (_controller.hasListener) _controller.add(_value);
@@ -59,9 +62,11 @@ class FakePodcastPlayer implements PodcastPlayer {
   final Duration? initialDuration;
   final List<Uri> loadedUrls = [];
   final List<Duration> seekPositions = [];
+  final List<Duration> seekOffsets = [];
   int playCalls = 0;
   int pauseCalls = 0;
   bool failOnLoad = false;
+  bool failOnSeekRelative = false;
 
   @override
   bool playing = false;
@@ -123,6 +128,20 @@ class FakePodcastPlayer implements PodcastPlayer {
   @override
   Future<void> seek(Duration position) async {
     seekPositions.add(position);
+    emitPosition(position);
+  }
+
+  @override
+  Future<void> seekRelative(Duration offset) async {
+    if (failOnSeekRelative) {
+      failOnSeekRelative = false;
+      throw const FormatException('simulated seek failure');
+    }
+    seekOffsets.add(offset);
+    var position = _position.value + offset;
+    if (position < Duration.zero) position = Duration.zero;
+    final duration = _duration.value;
+    if (duration != null && position > duration) position = duration;
     emitPosition(position);
   }
 

@@ -26,6 +26,8 @@ class _FakePodcastPlayer implements PodcastPlayer {
   @override
   bool playing = false;
 
+  Duration _current = Duration.zero;
+
   final _playing = StreamController<bool>.broadcast();
   final _position = StreamController<Duration>.broadcast();
   final _duration = StreamController<Duration?>.broadcast();
@@ -72,6 +74,19 @@ class _FakePodcastPlayer implements PodcastPlayer {
 
   @override
   Future<void> seek(Duration position) async {
+    _current = position;
+    _position.add(position);
+  }
+
+  @override
+  Future<void> seekRelative(Duration offset) async {
+    // Same clamp logic as FakePodcastPlayer: stay within the audio range,
+    // where the duration matches the 27 minutes emitted by setUrlAndPlay.
+    var position = _current + offset;
+    if (position < Duration.zero) position = Duration.zero;
+    const duration = Duration(minutes: 27);
+    if (position > duration) position = duration;
+    _current = position;
     _position.add(position);
   }
 

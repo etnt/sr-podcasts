@@ -127,6 +127,10 @@ To keep car browsing responsive, Android Auto shows the latest API page, up
 to 100 episodes per show. The phone UI can still load the complete episode
 history.
 
+The media session and the in-app player bar expose rewind and fast-forward
+buttons that jump 15 seconds within the current episode. Previous and next
+still change the episode.
+
 ## Playback architecture
 
 The app plays audio with `just_audio` and `audio_service`. They provide one

@@ -141,6 +141,63 @@ void main() {
     expect(player.loadedUrls, [_audioUrl()]);
   });
 
+  testWidgets('skip buttons seek 15 seconds in each direction', (tester) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode()),
+    );
+
+    Finder buttonOf(String tooltip) => find.ancestor(
+      of: find.byTooltip(tooltip),
+      matching: find.byType(IconButton),
+    );
+    final backRect = tester.getRect(buttonOf('Back 15 seconds'));
+    expect(backRect.width, greaterThanOrEqualTo(48));
+    expect(backRect.height, greaterThanOrEqualTo(48));
+    final forwardRect = tester.getRect(buttonOf('Forward 15 seconds'));
+    expect(forwardRect.width, greaterThanOrEqualTo(48));
+    expect(forwardRect.height, greaterThanOrEqualTo(48));
+
+    await tester.tap(find.byTooltip('Back 15 seconds'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Forward 15 seconds'));
+    await tester.pump();
+
+    expect(player.seekOffsets, [
+      const Duration(seconds: -15),
+      const Duration(seconds: 15),
+    ]);
+  });
+
+  testWidgets('skip buttons are disabled without a playable duration', (
+    tester,
+  ) async {
+    final player = FakePodcastPlayer(initialDuration: null);
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode(duration: null)),
+    );
+
+    final back = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byTooltip('Back 15 seconds'),
+        matching: find.byType(IconButton),
+      ),
+    );
+    final forward = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byTooltip('Forward 15 seconds'),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(back.onPressed, isNull);
+    expect(forward.onPressed, isNull);
+    expect(player.seekOffsets, isEmpty);
+  });
+
   testWidgets('delegates seek requests to the player', (tester) async {
     final player = FakePodcastPlayer();
     await _pumpControls(

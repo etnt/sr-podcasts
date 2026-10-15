@@ -31,19 +31,66 @@ class _FakeAudioPlayerPlatform extends AudioPlayerPlatform {
 
   final playCompleter = Completer<PlayResponse>();
 
-  @override
-  Stream<PlaybackEventMessage> get playbackEventMessageStream =>
-      const Stream<PlaybackEventMessage>.empty();
+  final _events = StreamController<PlaybackEventMessage>.broadcast();
 
   @override
-  Future<LoadResponse> load(LoadRequest request) async =>
-      LoadResponse(duration: const Duration(minutes: 10));
+  Stream<PlaybackEventMessage> get playbackEventMessageStream => _events.stream;
+
+  /// Publishes a playback event the way the real platform does. [duration]
+  /// gives the player its duration, which the handler's jumps clamp against.
+  void emitEvent({required Duration updatePosition, Duration? duration}) =>
+      _events.add(
+        PlaybackEventMessage(
+          processingState: ProcessingStateMessage.ready,
+          updateTime: DateTime.now(),
+          updatePosition: updatePosition,
+          bufferedPosition: updatePosition,
+          duration: duration,
+          icyMetadata: null,
+          currentIndex: 0,
+          androidAudioSessionId: null,
+        ),
+      );
+
+  @override
+  Future<LoadResponse> load(LoadRequest request) async {
+    // Report ready with the duration, as a real platform would, so the load
+    // completes and the player knows the audio length.
+    emitEvent(
+      updatePosition: Duration.zero,
+      duration: const Duration(minutes: 10),
+    );
+    return LoadResponse(duration: const Duration(minutes: 10));
+  }
 
   @override
   Future<PlayResponse> play(PlayRequest request) => playCompleter.future;
 
   @override
   Future<PauseResponse> pause(PauseRequest request) async => PauseResponse();
+
+  @override
+  Future<SeekResponse> seek(SeekRequest request) async => SeekResponse();
+
+  // No-ops for the setters just_audio sends when it activates the platform
+  // or loads a source. The setters for features these tests never touch
+  // (pitch, skip silence, loop/shuffle mode, audio attributes) stay omitted.
+  @override
+  Future<SetVolumeResponse> setVolume(SetVolumeRequest request) async =>
+      SetVolumeResponse();
+
+  @override
+  Future<SetSpeedResponse> setSpeed(SetSpeedRequest request) async =>
+      SetSpeedResponse();
+
+  @override
+  Future<SetLoopModeResponse> setLoopMode(SetLoopModeRequest request) async =>
+      SetLoopModeResponse();
+
+  @override
+  Future<SetShuffleModeResponse> setShuffleMode(
+    SetShuffleModeRequest request,
+  ) async => SetShuffleModeResponse();
 }
 
 PodcastProgram _program({int id = 5386, Uri? imageUrl}) => PodcastProgram(
@@ -243,9 +290,26 @@ void main() {
           fakeAudioPlatform.players.last.playCompleter.isCompleted,
           isFalse,
         );
+        // Episode 11 is first in the queue, so there is no skipToPrevious.
+        expect(handler.playbackState.value.controls, [
+          MediaControl.rewind,
+          MediaControl.pause,
+          MediaControl.fastForward,
+          MediaControl.skipToNext,
+        ]);
+        // The three compact slots are the 15-second jumps around play/pause.
+        expect(handler.playbackState.value.androidCompactActionIndices, [
+          0,
+          1,
+          2,
+        ]);
         expect(
-          handler.playbackState.value.controls,
-          containsAll([MediaControl.pause, MediaControl.skipToNext]),
+          handler.playbackState.value.systemActions,
+          containsAll([
+            MediaAction.seek,
+            MediaAction.rewind,
+            MediaAction.fastForward,
+          ]),
         );
       },
     );
@@ -274,6 +338,38 @@ void main() {
       expect(callCount(), 1);
       expect(handler.episodeIndex, isEmpty);
     });
+
+    test(
+      'compact indices skip episode steps when the queue has neighbours',
+      () async {
+        final (client, _) = _clientServing([
+          _episodeJson(11),
+          _episodeJson(12),
+          _episodeJson(13),
+        ]);
+        final handler = _handler(client, [_program()]);
+        final children = await handler.getChildren('show:5386');
+
+        // Episode 12 sits in the middle, so previous and next both exist and
+        // the compact slots still stay on rewind, play/pause, fast-forward.
+        await handler
+            .playMediaItem(children[1])
+            .timeout(const Duration(seconds: 1));
+
+        expect(handler.playbackState.value.controls, [
+          MediaControl.skipToPrevious,
+          MediaControl.rewind,
+          MediaControl.pause,
+          MediaControl.fastForward,
+          MediaControl.skipToNext,
+        ]);
+        expect(handler.playbackState.value.androidCompactActionIndices, [
+          1,
+          2,
+          3,
+        ]);
+      },
+    );
   });
 
   group('publishQueue', () {
@@ -337,6 +433,79 @@ void main() {
       expect(handler.mediaItem.value, isNull);
       expect(handler.episodeIndex, isEmpty);
       expect(callCount(), 0);
+    });
+  });
+
+  group('rewind and fast-forward', () {
+    // The overridden handler jumps read the just_audio player state, so the
+    // tests set the player position through the player itself. They need no
+    // AudioService.config and never depend on the MediaItem duration, which
+    // phone-started playback does not set at all.
+    test(
+      'fastForward seeks 15 seconds ahead of the current position',
+      () async {
+        final handler = _handler(_clientServing([]).$1, [_program()]);
+        await handler.player.seek(const Duration(seconds: 100));
+
+        await handler.fastForward();
+
+        expect(handler.player.position, const Duration(seconds: 115));
+      },
+    );
+
+    test('rewind seeks 15 seconds behind the current position', () async {
+      final handler = _handler(_clientServing([]).$1, [_program()]);
+      await handler.player.seek(const Duration(seconds: 100));
+
+      await handler.rewind();
+
+      expect(handler.player.position, const Duration(seconds: 85));
+    });
+
+    test('rewind clamps at the start of the episode', () async {
+      final handler = _handler(_clientServing([]).$1, [_program()]);
+      await handler.player.seek(const Duration(seconds: 5));
+
+      await handler.rewind();
+
+      expect(handler.player.position, Duration.zero);
+    });
+
+    test(
+      'fastForward still moves forward 15 seconds without a MediaItem duration',
+      () async {
+        final handler = _handler(_clientServing([]).$1, [_program()]);
+        // Phone-started playback publishes a MediaItem without a duration;
+        // the jump must not clamp to Duration.zero like the stock
+        // SeekHandler does.
+        handler.mediaItem.add(
+          const MediaItem(id: 'episode:11', title: 'Episode 11'),
+        );
+        await handler.player.seek(const Duration(seconds: 100));
+
+        await handler.fastForward();
+
+        expect(handler.player.position, const Duration(seconds: 115));
+      },
+    );
+
+    test('fastForward clamps at the player duration', () async {
+      final handler = _handler(_clientServing([]).$1, [_program()]);
+      handler.mediaItem.add(
+        const MediaItem(id: 'episode:11', title: 'Episode 11'),
+      );
+      // The fake just_audio platform reports a 10-minute load, so the player
+      // knows the duration even though the MediaItem does not.
+      await handler.player.setAudioSource(
+        AudioSource.uri(Uri.parse('https://podfile.cloud/audio11.mp3')),
+      );
+      await handler.player.seek(
+        const Duration(minutes: 10) - const Duration(seconds: 5),
+      );
+
+      await handler.fastForward();
+
+      expect(handler.player.position, const Duration(minutes: 10));
     });
   });
 }
