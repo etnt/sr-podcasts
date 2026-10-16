@@ -1,13 +1,16 @@
 import 'package:audio_service/audio_service.dart';
+import 'package:auto_upgrade/auto_upgrade.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/podcast/audio/podcast_audio_handler.dart';
+import 'src/config/app_version.dart';
 import 'src/podcast/audio/podcast_playback.dart';
 import 'src/podcast/data/subscriptions.dart';
 import 'src/podcast/data/sr_api_client.dart';
+import 'src/podcast/data/update_service.dart';
 import 'src/podcast/presentation/subscriptions_screen.dart';
 
 Future<void> main() async {
@@ -35,6 +38,16 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        releaseCheckerProvider.overrideWithValue(
+          ReleaseChecker(
+            owner: 'etnt',
+            repo: 'sr-podcasts',
+            currentVersion: appVersion,
+            // Throttles the GitHub check to at most once per interval across
+            // restarts. Errors and 'dev' builds stay silent.
+            checkStore: SharedPrefsUpdateCheckStore(sharedPreferences),
+          ),
+        ),
       ],
       child: const MainApp(),
     ),

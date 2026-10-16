@@ -2,20 +2,61 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_version.dart';
 import '../data/subscriptions.dart';
+import '../data/update_service.dart';
 import '../domain/podcast_program.dart';
 import 'podcast_screen.dart';
 import 'search_program_screen.dart';
+import 'update_prompt.dart';
 import 'widgets/program_artwork.dart';
 
 /// Home screen: the list of locally subscribed Sveriges Radio shows.
-class SubscriptionsScreen extends ConsumerWidget {
+class SubscriptionsScreen extends ConsumerStatefulWidget {
   const SubscriptionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SubscriptionsScreen> createState() =>
+      _SubscriptionsScreenState();
+}
+
+class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
+  /// Ensures the startup update check runs at most once per state instance.
+  bool _updateCheckStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget update check, deferred to after the first frame so the
+    // dialog never collides with the initial build.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  /// Runs the throttled GitHub Releases check and, on a newer release, shows
+  /// the dialog. "Update now" opens the release page in the browser; nothing
+  /// opens without the user's explicit tap.
+  void _checkForUpdate() {
+    if (_updateCheckStarted || !mounted) return;
+    _updateCheckStarted = true;
+    maybeShowUpdateDialog(
+      context,
+      checker: ref.read(releaseCheckerProvider),
+      onUpdate: (info) async {
+        final uri = Uri.tryParse(info.releasePageUrl);
+        if (uri == null) return;
+        try {
+          // A `false` or throw result is handled silently: the user can still
+          // find the release page in the repository.
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final subscriptions = ref.watch(subscriptionsProvider);
 
     return Scaffold(

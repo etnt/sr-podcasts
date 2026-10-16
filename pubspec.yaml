@@ -8,6 +8,10 @@ environment:
 
 dependencies:
   audio_service: ^0.18.19
+  # GitHub Releases update check (notify and open).
+  auto_upgrade:
+    git:
+      url: https://github.com/etnt/auto_upgrade.git
   audio_session: ^0.2.4
   flutter:
     sdk: flutter

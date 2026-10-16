@@ -75,6 +75,22 @@ keytool -genkey -v \
   -alias release
 ```
 
+## Update check
+
+On launch, the home screen checks GitHub Releases
+(`etnt/sr-podcasts`) for a newer version using the `auto_upgrade` package
+(a git dependency in `pubspec.yaml`). If one exists, a dialog offers
+**Update now**, which opens the release page in the browser, or **Later**.
+Nothing opens without the user's tap.
+
+- The check runs at most once per 24 hours across restarts
+  (`SharedPrefsUpdateCheckStore`, wired in `main.dart`).
+- Errors and offline launches are silent. Dev builds (no `APP_VERSION`)
+  skip the check entirely, so `flutter run` never hits the network.
+- The `https` query in `AndroidManifest.xml` lets `url_launcher` open the
+  browser on Android 11+.
+- Widget tests use a fake `ReleaseChecker` via `releaseCheckerProvider`.
+
 ## Sveriges Radio API facts
 
 The app talks to the public API of Sveriges Radio at `api.sr.se`. A developer
