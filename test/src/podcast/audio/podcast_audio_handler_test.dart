@@ -210,35 +210,14 @@ void main() {
           fakeAudioPlatform.players.last.playCompleter.isCompleted,
           isFalse,
         );
-        // One explanation for both playback-state tests: the car-safe
-        // three-control set (rewind, play/pause, fast-forward) exists
-        // because one shared controls list serves both the phone
-        // notification and the car player, and — UNVERIFIED hypothesis —
-        // the car player appears to break on a wider control set, so the
-        // set is capped and episode changes go through systemActions and
-        // the queue instead (see _broadcastState and DEVELOPMENT.md).
+        // Rewind/fast-forward are not advertised to the media session; they
+        // broke the Android Auto player.
         expect(handler.playbackState.value.controls, [
-          MediaControl.rewind,
+          MediaControl.skipToPrevious,
           MediaControl.pause,
-          MediaControl.fastForward,
+          MediaControl.skipToNext,
         ]);
-        // The compact notification slots are rewind, play/pause, and
-        // fast-forward.
-        expect(handler.playbackState.value.androidCompactActionIndices, [
-          0,
-          1,
-          2,
-        ]);
-        expect(
-          handler.playbackState.value.systemActions,
-          containsAll([
-            MediaAction.seek,
-            MediaAction.rewind,
-            MediaAction.fastForward,
-            MediaAction.skipToPrevious,
-            MediaAction.skipToNext,
-          ]),
-        );
+        expect(handler.playbackState.value.systemActions, {MediaAction.seek});
       },
     );
 
@@ -266,41 +245,6 @@ void main() {
       expect(callCount(), 1);
       expect(handler.episodeIndex, isEmpty);
     });
-
-    test(
-      'queue neighbours do not add controls beyond the car-safe three',
-      () async {
-        final (client, _) = _clientServing([
-          _episodeJson(11),
-          _episodeJson(12),
-          _episodeJson(13),
-        ]);
-        final handler = _handler(client, [_program()]);
-        final children = await handler.getChildren('show:5386');
-
-        // Repeats the setup above with an episode that has both queue
-        // neighbours, so a regression that re-adds skipToPrevious/
-        // skipToNext controls fails here too.
-        await handler
-            .playMediaItem(children[1])
-            .timeout(const Duration(seconds: 1));
-
-        // Neighbour-specific check only: the played episode sits between a
-        // previous and a next queue item, and neither adds a control beyond
-        // the car-safe three already asserted in the playback-state test
-        // above.
-        expect(handler.playbackState.value.queueIndex, 1);
-        expect(handler.playbackState.value.controls, hasLength(3));
-        expect(
-          handler.playbackState.value.controls,
-          isNot(contains(MediaControl.skipToPrevious)),
-        );
-        expect(
-          handler.playbackState.value.controls,
-          isNot(contains(MediaControl.skipToNext)),
-        );
-      },
-    );
   });
 
   group('publishQueue', () {
