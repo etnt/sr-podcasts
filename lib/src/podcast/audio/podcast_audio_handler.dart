@@ -278,6 +278,12 @@ class PodcastAudioHandler extends BaseAudioHandler
     }
   }
 
+  /// Resolves the episode and show behind a queue media item, so the phone
+  /// UI can step between episodes without duplicating the media-id mapping
+  /// that the browse tree builds.
+  (PodcastEpisode, PodcastProgram)? episodeForMediaId(String mediaId) =>
+      _episodeIndex[mediaId];
+
   /// Steps to the queue item at [index]. The stock [QueueHandler] computes
   /// the target index for skipToNext/skipToPrevious and delegates here.
   @override
@@ -347,30 +353,51 @@ class PodcastAudioHandler extends BaseAudioHandler
   }
 
   /// Maps the current just_audio event onto the audio_service playback state
-  /// that the media notification and Android Auto read.
+  /// that the media notification, lock screen, and Android Auto all read.
+  ///
+  /// audio_service exposes one media session, so one [controls] list serves
+  /// both the car player and the phone notification; separate control sets
+  /// per client are not possible with this package. UNVERIFIED: a manual
+  /// test observed the Android Auto player appearing to break on a wider
+  /// control set (see DEVELOPMENT.md's verification block), so [controls]
+  /// stays at the car-safe three: the 15-second jumps around play/pause.
+  ///
+  /// KNOWN TRADE-OFF, NEEDS PRODUCT SIGN-OFF: the phone notification and
+  /// lock screen share this control set and show only rewind, play/pause,
+  /// and fast-forward, so they lose the episode prev/next buttons. Episode
+  /// prev/next appear only in the in-app player bar (see [episodeForMediaId]
+  /// and the playback notifier that uses it). UNVERIFIED: in the car,
+  /// previous and next are expected to stay reachable through
+  /// [systemActions] and the queue.
   void _broadcastState(PlaybackEvent event) {
     final playing = _player.playing;
-    final hasPrevious = _queueIndex > 0;
-    final hasNext = _queueIndex + 1 < queue.value.length;
     final playPause = playing ? MediaControl.pause : MediaControl.play;
-    final controls = [
-      if (hasPrevious) MediaControl.skipToPrevious,
-      MediaControl.rewind,
-      playPause,
-      MediaControl.fastForward,
-      if (hasNext) MediaControl.skipToNext,
-    ];
+    // UNVERIFIED (observed, not verified): a manual test observed the
+    // Android Auto player appearing to break when the session published
+    // more than a handful of controls, so the list is capped at these
+    // three entries. Confirm on a device or the desktop head unit before
+    // widening the set (see DEVELOPMENT.md's verification block).
+    final controls = [MediaControl.rewind, playPause, MediaControl.fastForward];
     playbackState.add(
       playbackState.value.copyWith(
         controls: controls,
-        // Android Auto and the notification show at most three compact
-        // slots; prefer the 15-second jumps around play/pause over
-        // episode changes, which stay available in the expanded layout.
+        // Derived by [_compactActionIndices] instead of hard-coding so a
+        // future edit to [controls] fails at runtime. The notification's
+        // compact view shows at most three slots. UNVERIFIED (observed, not
+        // verified): this is a notification-only setting that Android Auto
+        // appears to ignore, laying out its own slots instead (see
+        // DEVELOPMENT.md's verification block).
         androidCompactActionIndices: _compactActionIndices(controls, playPause),
+        // UNVERIFIED: episode changes and the 15-second jumps are expected to
+        // stay reachable on the car through the system actions, without
+        // occupying control slots. Confirm on a device or DHU (see
+        // DEVELOPMENT.md's verification block).
         systemActions: const {
           MediaAction.seek,
           MediaAction.rewind,
           MediaAction.fastForward,
+          MediaAction.skipToPrevious,
+          MediaAction.skipToNext,
         },
         processingState: switch (_player.processingState) {
           ProcessingState.idle => AudioProcessingState.idle,
@@ -388,16 +415,29 @@ class PodcastAudioHandler extends BaseAudioHandler
     );
   }
 
-  /// The three compact notification/Android Auto slots: rewind, play/pause,
-  /// and fast-forward, expressed as their real indices within [controls].
+  /// The indices of the compact notification slots, derived from [controls]
+  /// so an edit that adds, removes, or reorders the car-safe control set
+  /// throws here at runtime instead of silently publishing invalid indices.
+  /// The check also enforces the three-control invariant directly: it throws
+  /// unless [controls] is exactly rewind, play/pause, and fast-forward
+  /// (indices.length is fixed at 3, so controls.length must equal 3).
   static List<int> _compactActionIndices(
     List<MediaControl> controls,
     MediaControl playPause,
-  ) => [
-    controls.indexOf(MediaControl.rewind),
-    controls.indexOf(playPause),
-    controls.indexOf(MediaControl.fastForward),
-  ];
+  ) {
+    final indices = [
+      controls.indexOf(MediaControl.rewind),
+      controls.indexOf(playPause),
+      controls.indexOf(MediaControl.fastForward),
+    ];
+    if (indices.contains(-1) || indices.length != controls.length) {
+      throw StateError(
+        'Compact action indices must cover exactly the three car-safe '
+        'controls (rewind, play/pause, fast-forward); got $controls.',
+      );
+    }
+    return indices;
+  }
 
   Future<void> _startPlayback() async {
     try {

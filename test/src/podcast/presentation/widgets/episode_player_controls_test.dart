@@ -27,18 +27,56 @@ class _SeededPlaybackNotifier extends PlaybackNotifier {
   PlaybackState build() => initialState;
 }
 
-Future<void> _pumpControls(
+/// A seeded notifier that also stubs the episode-neighbour getters and
+/// records prev/next calls. The real getters read the process-wide audio
+/// handler (sharedPodcastAudioHandler), which widget tests cannot install
+/// without the just_audio platform fake and a fake API client, so the
+/// widget-level tests stub the neighbours; the real getters and step
+/// methods are covered in podcast_playback_test.dart.
+class _QueueNeighboursSeededNotifier extends _SeededPlaybackNotifier {
+  _QueueNeighboursSeededNotifier(
+    super.initialState, {
+    required this.hasPreviousEpisodeOverride,
+    required this.hasNextEpisodeOverride,
+  });
+
+  final bool hasPreviousEpisodeOverride;
+  final bool hasNextEpisodeOverride;
+
+  int previousEpisodeCalls = 0;
+  int nextEpisodeCalls = 0;
+
+  @override
+  bool get hasPreviousEpisode => hasPreviousEpisodeOverride;
+
+  @override
+  bool get hasNextEpisode => hasNextEpisodeOverride;
+
+  @override
+  Future<void> previousEpisode() async => previousEpisodeCalls++;
+
+  @override
+  Future<void> nextEpisode() async => nextEpisodeCalls++;
+}
+
+Future<_SeededPlaybackNotifier> _pumpControls(
   WidgetTester tester, {
   required FakePodcastPlayer player,
   required PlaybackState playbackState,
+  ({bool previous, bool next})? queueNeighbours,
 }) async {
+  final notifier = queueNeighbours == null
+      ? _SeededPlaybackNotifier(playbackState)
+      : _QueueNeighboursSeededNotifier(
+          playbackState,
+          hasPreviousEpisodeOverride: queueNeighbours.previous,
+          hasNextEpisodeOverride: queueNeighbours.next,
+        );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         podcastPlayerProvider.overrideWithValue(player),
-        playbackProvider.overrideWith(
-          () => _SeededPlaybackNotifier(playbackState),
-        ),
+        playbackProvider.overrideWith(() => notifier),
       ],
       child: const MaterialApp(home: Scaffold(body: EpisodePlayerControls())),
     ),
@@ -46,6 +84,7 @@ Future<void> _pumpControls(
   // One pump flushes the fake's replayed stream values, the next renders them.
   await tester.pump();
   await tester.pump();
+  return notifier;
 }
 
 void main() {
@@ -214,6 +253,126 @@ void main() {
     expect(
       player.seekPositions.single.inMilliseconds,
       inInclusiveRange(0, maxDuration.inMilliseconds),
+    );
+  });
+
+  Finder stepButtonOf(String tooltip) => find.ancestor(
+    of: find.byTooltip(tooltip),
+    matching: find.byType(IconButton),
+  );
+
+  testWidgets('prev/next episode buttons step between queue neighbours', (
+    tester,
+  ) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode()),
+      queueNeighbours: (previous: true, next: true),
+    );
+    // _pumpControls builds the subclass when queueNeighbours is given, and
+    // the override returns that same instance.
+    final notifier =
+        ProviderScope.containerOf(
+              tester.element(find.byType(EpisodePlayerControls)),
+            ).read(playbackProvider.notifier)
+            as _QueueNeighboursSeededNotifier;
+
+    final previous = tester.widget<IconButton>(
+      stepButtonOf('Previous episode'),
+    );
+    final next = tester.widget<IconButton>(stepButtonOf('Next episode'));
+    expect(previous.onPressed, isNotNull);
+    expect(next.onPressed, isNotNull);
+
+    await tester.tap(find.byTooltip('Previous episode'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Next episode'));
+    await tester.pump();
+
+    expect(notifier.previousEpisodeCalls, 1);
+    expect(notifier.nextEpisodeCalls, 1);
+  });
+
+  // Without the process-wide audio handler there is no published queue, so
+  // the real neighbour getters report false and both buttons stay disabled.
+  testWidgets('prev/next episode buttons disabled without a queue', (
+    tester,
+  ) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode()),
+    );
+
+    final previous = tester.widget<IconButton>(
+      stepButtonOf('Previous episode'),
+    );
+    final next = tester.widget<IconButton>(stepButtonOf('Next episode'));
+    expect(previous.onPressed, isNull);
+    expect(next.onPressed, isNull);
+  });
+
+  testWidgets('previous episode button disabled at the queue start', (
+    tester,
+  ) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode()),
+      queueNeighbours: (previous: false, next: true),
+    );
+
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Previous episode')).onPressed,
+      isNull,
+    );
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Next episode')).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('next episode button disabled at the queue end', (tester) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode()),
+      queueNeighbours: (previous: true, next: false),
+    );
+
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Previous episode')).onPressed,
+      isNotNull,
+    );
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Next episode')).onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('prev/next episode buttons disabled while loading', (
+    tester,
+  ) async {
+    final player = FakePodcastPlayer();
+    await _pumpControls(
+      tester,
+      player: player,
+      playbackState: PlaybackState(episode: _episode(), isLoading: true),
+      queueNeighbours: (previous: true, next: true),
+    );
+
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Previous episode')).onPressed,
+      isNull,
+    );
+    expect(
+      tester.widget<IconButton>(stepButtonOf('Next episode')).onPressed,
+      isNull,
     );
   });
 }

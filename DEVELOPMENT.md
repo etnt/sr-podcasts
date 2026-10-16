@@ -129,7 +129,38 @@ history.
 
 The media session and the in-app player bar expose rewind and fast-forward
 buttons that jump 15 seconds within the current episode. Previous and next
-still change the episode.
+still change the episode: the in-app player bar shows prev/next episode
+buttons. UNVERIFIED: the car is expected to reach previous and next through
+the system actions and the queue (see the trade-off and verification notes
+below).
+
+The session publishes at most three controls (rewind, play/pause,
+fast-forward). One shared controls list serves both the car player and the
+phone notification because audio_service exposes a single media session;
+separate control sets per client are not possible with this package. The
+car fix is UNVERIFIED: a manual test observed the Android Auto player
+appearing to break on a wider control set, and the car reaches previous and next
+only through the system actions and the queue on the unconfirmed
+assumption that system actions are capabilities rather than rendered
+buttons. The trade-off is that the phone notification and lock screen
+also show only the three car-safe controls and lose the episode
+prev/next buttons; on the phone, episode changes happen in the in-app
+player bar instead (the compact action indices affect only the phone
+notification's compact view, and Android Auto appears to ignore them and
+lay out its own slots — observed, not verified).
+
+KNOWN TRADE-OFF, NEEDS PRODUCT SIGN-OFF: the phone notification and lock
+screen show only rewind, play/pause, and fast-forward and no longer offer
+episode prev/next. Prev/next remain only in the in-app player bar. Product
+must sign off on losing prev/next on the notification and lock screen
+before the three-control set is treated as final.
+
+Open verification item: verify the whole car fix on a device or desktop
+head unit (DHU) with `adb logcat` before treating the car breakage as
+fixed: (a) confirm that a wider control set actually broke the car
+player, (b) confirm that the three-control set keeps the car player
+working, and (c) confirm that system actions do not render as episode
+step buttons in the car player.
 
 ## Playback architecture
 

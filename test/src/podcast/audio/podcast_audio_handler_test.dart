@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
@@ -12,86 +11,7 @@ import 'package:podcastshortcut/src/podcast/data/sr_api_client.dart';
 import 'package:podcastshortcut/src/podcast/domain/podcast_episode.dart';
 import 'package:podcastshortcut/src/podcast/domain/podcast_program.dart';
 
-/// just_audio's AudioPlayer binds to platform channels at construction.
-/// The tests install a fake platform so a real AudioPlayer object can be
-/// created without native audio; the browse-tree logic never loads audio.
-class _FakeJustAudioPlatform extends JustAudioPlatform {
-  final players = <_FakeAudioPlayerPlatform>[];
-
-  @override
-  Future<AudioPlayerPlatform> init(InitRequest request) async {
-    final player = _FakeAudioPlayerPlatform(request.id);
-    players.add(player);
-    return player;
-  }
-}
-
-class _FakeAudioPlayerPlatform extends AudioPlayerPlatform {
-  _FakeAudioPlayerPlatform(super.id);
-
-  final playCompleter = Completer<PlayResponse>();
-
-  final _events = StreamController<PlaybackEventMessage>.broadcast();
-
-  @override
-  Stream<PlaybackEventMessage> get playbackEventMessageStream => _events.stream;
-
-  /// Publishes a playback event the way the real platform does. [duration]
-  /// gives the player its duration, which the handler's jumps clamp against.
-  void emitEvent({required Duration updatePosition, Duration? duration}) =>
-      _events.add(
-        PlaybackEventMessage(
-          processingState: ProcessingStateMessage.ready,
-          updateTime: DateTime.now(),
-          updatePosition: updatePosition,
-          bufferedPosition: updatePosition,
-          duration: duration,
-          icyMetadata: null,
-          currentIndex: 0,
-          androidAudioSessionId: null,
-        ),
-      );
-
-  @override
-  Future<LoadResponse> load(LoadRequest request) async {
-    // Report ready with the duration, as a real platform would, so the load
-    // completes and the player knows the audio length.
-    emitEvent(
-      updatePosition: Duration.zero,
-      duration: const Duration(minutes: 10),
-    );
-    return LoadResponse(duration: const Duration(minutes: 10));
-  }
-
-  @override
-  Future<PlayResponse> play(PlayRequest request) => playCompleter.future;
-
-  @override
-  Future<PauseResponse> pause(PauseRequest request) async => PauseResponse();
-
-  @override
-  Future<SeekResponse> seek(SeekRequest request) async => SeekResponse();
-
-  // No-ops for the setters just_audio sends when it activates the platform
-  // or loads a source. The setters for features these tests never touch
-  // (pitch, skip silence, loop/shuffle mode, audio attributes) stay omitted.
-  @override
-  Future<SetVolumeResponse> setVolume(SetVolumeRequest request) async =>
-      SetVolumeResponse();
-
-  @override
-  Future<SetSpeedResponse> setSpeed(SetSpeedRequest request) async =>
-      SetSpeedResponse();
-
-  @override
-  Future<SetLoopModeResponse> setLoopMode(SetLoopModeRequest request) async =>
-      SetLoopModeResponse();
-
-  @override
-  Future<SetShuffleModeResponse> setShuffleMode(
-    SetShuffleModeRequest request,
-  ) async => SetShuffleModeResponse();
-}
+import '../../../fakes/fake_just_audio_platform.dart';
 
 PodcastProgram _program({int id = 5386, Uri? imageUrl}) => PodcastProgram(
   id: id,
@@ -141,7 +61,7 @@ PodcastAudioHandler _handler(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final fakeAudioPlatform = _FakeJustAudioPlatform();
+  final fakeAudioPlatform = FakeJustAudioPlatform();
   JustAudioPlatform.instance = fakeAudioPlatform;
 
   group('getChildren root', () {
@@ -290,14 +210,20 @@ void main() {
           fakeAudioPlatform.players.last.playCompleter.isCompleted,
           isFalse,
         );
-        // Episode 11 is first in the queue, so there is no skipToPrevious.
+        // One explanation for both playback-state tests: the car-safe
+        // three-control set (rewind, play/pause, fast-forward) exists
+        // because one shared controls list serves both the phone
+        // notification and the car player, and — UNVERIFIED hypothesis —
+        // the car player appears to break on a wider control set, so the
+        // set is capped and episode changes go through systemActions and
+        // the queue instead (see _broadcastState and DEVELOPMENT.md).
         expect(handler.playbackState.value.controls, [
           MediaControl.rewind,
           MediaControl.pause,
           MediaControl.fastForward,
-          MediaControl.skipToNext,
         ]);
-        // The three compact slots are the 15-second jumps around play/pause.
+        // The compact notification slots are rewind, play/pause, and
+        // fast-forward.
         expect(handler.playbackState.value.androidCompactActionIndices, [
           0,
           1,
@@ -309,6 +235,8 @@ void main() {
             MediaAction.seek,
             MediaAction.rewind,
             MediaAction.fastForward,
+            MediaAction.skipToPrevious,
+            MediaAction.skipToNext,
           ]),
         );
       },
@@ -340,7 +268,7 @@ void main() {
     });
 
     test(
-      'compact indices skip episode steps when the queue has neighbours',
+      'queue neighbours do not add controls beyond the car-safe three',
       () async {
         final (client, _) = _clientServing([
           _episodeJson(11),
@@ -350,24 +278,27 @@ void main() {
         final handler = _handler(client, [_program()]);
         final children = await handler.getChildren('show:5386');
 
-        // Episode 12 sits in the middle, so previous and next both exist and
-        // the compact slots still stay on rewind, play/pause, fast-forward.
+        // Repeats the setup above with an episode that has both queue
+        // neighbours, so a regression that re-adds skipToPrevious/
+        // skipToNext controls fails here too.
         await handler
             .playMediaItem(children[1])
             .timeout(const Duration(seconds: 1));
 
-        expect(handler.playbackState.value.controls, [
-          MediaControl.skipToPrevious,
-          MediaControl.rewind,
-          MediaControl.pause,
-          MediaControl.fastForward,
-          MediaControl.skipToNext,
-        ]);
-        expect(handler.playbackState.value.androidCompactActionIndices, [
-          1,
-          2,
-          3,
-        ]);
+        // Neighbour-specific check only: the played episode sits between a
+        // previous and a next queue item, and neither adds a control beyond
+        // the car-safe three already asserted in the playback-state test
+        // above.
+        expect(handler.playbackState.value.queueIndex, 1);
+        expect(handler.playbackState.value.controls, hasLength(3));
+        expect(
+          handler.playbackState.value.controls,
+          isNot(contains(MediaControl.skipToPrevious)),
+        );
+        expect(
+          handler.playbackState.value.controls,
+          isNot(contains(MediaControl.skipToNext)),
+        );
       },
     );
   });

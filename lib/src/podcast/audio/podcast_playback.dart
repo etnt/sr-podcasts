@@ -45,9 +45,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   }) async {
     final audioUrl = episode.audioUrl;
     if (audioUrl == null) {
-      state = _errorState(
-        'This episode does not have a playable audio file.',
-      );
+      state = _errorState('This episode does not have a playable audio file.');
       return;
     }
 
@@ -91,7 +89,9 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
         await player.play();
       }
     } catch (error) {
-      state = _errorState('Playback could not continue. Tap play to try again.');
+      state = _errorState(
+        'Playback could not continue. Tap play to try again.',
+      );
     }
   }
 
@@ -116,6 +116,62 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
 
   /// Jumps 15 seconds forward in the current episode.
   Future<void> skipForward() => _skip(PodcastAudioHandler.skipInterval);
+
+  /// Whether the published queue holds an episode before the current one.
+  /// Returns false when the audio handler has not been created yet, which
+  /// is the case in widget tests that seed this notifier directly.
+  bool get hasPreviousEpisode => _hasNeighbour(-1);
+
+  /// Whether the published queue holds an episode after the current one.
+  bool get hasNextEpisode => _hasNeighbour(1);
+
+  bool _hasNeighbour(int delta) {
+    final handler = _handlerOrNull();
+    if (handler == null) return false;
+    final target = (handler.playbackState.value.queueIndex ?? 0) + delta;
+    final queue = handler.queue.value;
+    return target >= 0 && target < queue.length;
+  }
+
+  /// Steps to the previous episode in the published queue, if any. The
+  /// handler republishes the queue around the new episode and keeps the
+  /// playing state, so the media session follows the change.
+  Future<void> previousEpisode() => _stepEpisode(-1);
+
+  /// Steps to the next episode in the published queue, if any.
+  /// See [previousEpisode].
+  Future<void> nextEpisode() => _stepEpisode(1);
+
+  Future<void> _stepEpisode(int delta) async {
+    final handler = _handlerOrNull();
+    if (handler == null) return;
+    final queue = handler.queue.value;
+    final target = (handler.playbackState.value.queueIndex ?? 0) + delta;
+    if (target < 0 || target >= queue.length) return;
+    final indexed = handler.episodeForMediaId(queue[target].id);
+    if (indexed == null) return;
+    final (episode, _) = indexed;
+    state = PlaybackState(episode: episode, isLoading: true);
+    try {
+      await handler.skipToQueueItem(target);
+      state = PlaybackState(episode: episode);
+    } catch (error) {
+      state = PlaybackState(
+        episode: episode,
+        errorMessage: 'Could not play this episode. Tap play to try again.',
+      );
+    }
+  }
+
+  PodcastAudioHandler? _handlerOrNull() {
+    try {
+      return sharedPodcastAudioHandler;
+    } on StateError {
+      // createPodcastAudioHandler has not run, so there is no queue to
+      // step through.
+      return null;
+    }
+  }
 
   Future<void> _skip(Duration offset) async {
     if (state.episode == null) return;

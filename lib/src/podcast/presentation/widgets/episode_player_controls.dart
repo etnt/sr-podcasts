@@ -14,6 +14,7 @@ class EpisodePlayerControls extends ConsumerWidget {
     if (episode == null) return const SizedBox.shrink();
 
     final player = ref.watch(podcastPlayerProvider);
+    final notifier = ref.read(playbackProvider.notifier);
     final isPlaying = ref.watch(_playingProvider(player)).value ?? false;
     final position =
         ref.watch(_positionProvider(player)).value ?? Duration.zero;
@@ -50,6 +51,14 @@ class EpisodePlayerControls extends ConsumerWidget {
               ],
               Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Previous episode',
+                    onPressed:
+                        !playback.isLoading && notifier.hasPreviousEpisode
+                        ? notifier.previousEpisode
+                        : null,
+                    icon: const Icon(Icons.skip_previous),
+                  ),
                   IconButton(
                     tooltip: 'Back 15 seconds',
                     onPressed: showProgress
@@ -89,6 +98,13 @@ class EpisodePlayerControls extends ConsumerWidget {
                               ref.read(playbackProvider.notifier).skipForward()
                         : null,
                     icon: const _SkipLabelIcon(forward: true),
+                  ),
+                  IconButton(
+                    tooltip: 'Next episode',
+                    onPressed: !playback.isLoading && notifier.hasNextEpisode
+                        ? notifier.nextEpisode
+                        : null,
+                    icon: const Icon(Icons.skip_next),
                   ),
                   Expanded(
                     // The position readout lives in the same column as the
